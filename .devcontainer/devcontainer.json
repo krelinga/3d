@@ -12,7 +12,11 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "./.devcontainer/setup.sh"
+	"postCreateCommand": "./.devcontainer/setup.sh",
+
+	"mounts": [
+		"source=/nas/dev,target=/nas/dev,type=bind,consistency=cached"
+	]
 
 	// Configure tool-specific properties.
 	// "customizations": {},
