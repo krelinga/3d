@@ -16,10 +16,16 @@
 
 	"mounts": [
 		"source=/nas/dev,target=/nas/dev,type=bind,consistency=cached"
-	]
+	],
 
 	// Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Antyos.openscad"
+			]
+		}
+	}
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
