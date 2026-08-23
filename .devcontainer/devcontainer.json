@@ -1,11 +1,9 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
 {
-	"name": "3d",
-	// Pinned toolchain image built by .github/workflows/image.yml from
-	// .devcontainer/Dockerfile. See docs/design/initial-design.md,
-	// "The toolchain is pinned by image digest, in every place that builds."
-	"image": "ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e44e46daf3ec9ea477b86b95d2d5c8ef43",
+	"name": "Ubuntu",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/base:noble",
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
@@ -16,6 +14,9 @@
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "./.devcontainer/setup.sh",
 
 	// Configure tool-specific properties.
 	"customizations": {
