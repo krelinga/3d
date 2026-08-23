@@ -1,6 +1,6 @@
 # Previewing rendered output from the devcontainer
 
-Status: draft — direction chosen, one blocking question left to answer in the UI
+Status: draft — extension route tested and rejected; own-server direction chosen, not yet built
 Scope: how someone editing `.scad` in the devcontainer sees the resulting
 geometry, interactively and from any angle, on a fast enough loop to iterate
 against.
@@ -33,7 +33,7 @@ Everything below assumes the toolchain design in
     you save foo.scad
            │
            ▼
-    ┌─────────────┐   watches the tree, debounces, decides nothing
+    ┌─────────────┐   watches sources, debounces, decides nothing
     │   watcher   │
     └──────┬──────┘
            │ runs
@@ -41,20 +41,22 @@ Everything below assumes the toolchain design in
     ┌─────────────┐   decides what actually needs rebuilding
     │    make     │   (already has the dependency graph)
     └──────┬──────┘
-           │ bin/openscad, render to temp + atomic rename
+           │ bin/openscad → temp → atomic mv
            ▼
-      out/…/foo.stl
-           │
-           ▼
-    ┌─────────────┐   watches that one file, reloads, keeps your camera
-    │  webview 3D │
-    │  viewer ext │
-    └─────────────┘
+      out/…/foo.3mf ──────────┐ served on request
+           │                  │
+           │ "done" (only after the file is complete)
+           ▼                  ▼
+    ┌──────────────────────────────┐
+    │  local server  ──SSE push──▶ │  browser / Simple Browser tab
+    │                              │  three.js scene stays alive;
+    │                              │  only geometry is swapped
+    └──────────────────────────────┘
 ```
 
-Two independent watchers, which is not a redundancy: ours watches *sources*
-to trigger builds, the extension's watches *one output* to trigger a redraw.
-Neither knows about the other.
+**One watcher, watching sources only.** Nothing watches the output — the
+reload signal is pushed after the render completes. That single change is
+what removes the whole class of failure found below.
 
 ## Part 1: the loop
 
@@ -98,121 +100,178 @@ pinned image, against openscad-image.md's premise that there is exactly one.
 
 ## Part 2: what displays it
 
-### Why a webview extension can work where `Antyos.openscad` could not
+### The extension route was tried and does not work
 
-Worth being precise, because the surface similarity is misleading.
-`Antyos.openscad` spawned a **native Qt process inside the container**, which
-needed an X display there — hence `qt.qpa.xcb: could not connect to display`.
-A webview extension is structurally different: the extension host runs in the
-container, but the webview renders in the **local** VS Code UI process on the
-local GPU, with VS Code proxying the file out. Nothing needs a display inside
-the container. The previous failure does not recur.
+Four candidates were read from source and two were tested live in this
+devcontainer. **None satisfies remote + hot reload + camera preservation**;
+each fails a different one.
 
-### Extension survey — read from source, and the obvious pick is wrong
+| Extension | Updated | Remote/devcontainer | Hot reload | Camera on reload |
+|---|---|---|---|---|
+| [`misiekhardcore.stl-previewer`](https://github.com/misiekhardcore/stl-previewer) | 2025-10 | ✅ works | ✅ plain overwrite only | ❌ **resets** |
+| [`tatsy.vscode-3d-preview`](https://github.com/tatsy/vscode-3d-preview) | 2025-01 | — | ❌ posts a message nothing listens for | — |
+| [`slevesque.vscode-3dviewer`](https://github.com/stef-levesque/vscode-3dviewer) | 2020-09 | ❌ green screen ([#32](https://github.com/stef-levesque/vscode-3dviewer/issues/32), unresolved) | ✅ | likely ✅ |
+| `planetsensorllc.stl-viewer` | 2026-04 | likely ✅ | ❌ none at all | — |
 
-All three candidates were cloned and read, because "has a file watcher" turns
-out not to mean "hot reload works."
+Measured results for `stl-previewer`, the only one that got as far as a live
+test:
 
-| Extension | Last commit | Reload path | Verdict |
-|---|---|---|---|
-| [`stl-previewer`](https://github.com/misiekhardcore/stl-previewer) | 2025-10 | watcher → `render()` → replaces `webview.html` | ✅ **recommended** |
-| [`vscode-3d-preview`](https://github.com/tatsy/vscode-3d-preview) | 2025-01 | watcher → `postMessage('modelRefresh')` → **nothing listens** | ❌ dead feature |
-| [`vscode-3dviewer`](https://github.com/stef-levesque/vscode-3dviewer) | 2021-02 | watcher → `postMessage` → listener present and handles it | ⚠️ works, unmaintained |
+| write strategy | result |
+|---|---|
+| plain overwrite | reloads, but **camera resets** |
+| render to temp + atomic `mv` | **no reload** |
+| render to temp + `mv` + `touch` | **no reload** |
 
-The trap: **`vscode-3d-preview` looks like the best choice and isn't.** It
-has an explicit `hotReload` setting (default on) and is recent. But it is a
-rewrite of the 2021 `vscode-3dviewer`, and while it kept the extension-side
-`webview.postMessage("modelRefresh")`, its rewritten `media/viewer.js` never
-calls `acquireVsCodeApi()` and registers no `message` listener anywhere. The
-message goes nowhere. The 2021 original it descends from *does* have the
-listener (`media/viewer.js:39` registers it, `:93` handles `modelRefresh`) —
-so the rewrite silently regressed the feature.
+Two predictions from source-reading did not survive contact with the UI, and
+both are worth recording as a caution about this kind of research:
 
-**`stl-previewer` is the pick**: newest, actively maintained, and its reload
-path is complete. It reloads by replacing the webview HTML wholesale, which
-would normally reset your camera on every save — the exact failure that would
-make this workflow infuriating — except it persists camera position
-explicitly (`RenderState.cameraPosition`, re-applied in `createCamera()`). So
-the angle you rotated to should survive a re-render, which is precisely the
-property this whole approach exists to provide.
+- `stl-previewer` has an explicit `RenderState.cameraPosition` persisted via
+  a state manager and re-applied in `createCamera()`. It still resets the
+  camera in practice. Reading state-management code does not establish that
+  state actually round-trips through a full webview HTML replacement.
+- `touch` after an atomic rename was expected to be a cheap rescue for the
+  missing change event. It is not, and no confirmed mechanism explains why a
+  `touch` produces no event on a path whose plain overwrites do. Recorded as
+  an observation, not a diagnosis.
 
-### Consequence: the preview loop must emit STL
+Also note `tatsy.vscode-3d-preview` is a rewrite of the 2020
+`vscode-3dviewer` that kept the extension-side
+`webview.postMessage("modelRefresh")` while its new `media/viewer.js` never
+calls `acquireVsCodeApi()` and registers no `message` listener. Its
+`hotReload` setting, default on, does nothing. **An extension having a
+`hotReload` option is not evidence that hot reload works.**
 
-All three viewers are STL-only; **none reads 3MF.** initial-design.md makes
-3MF primary and STL derived, so this costs nothing — the STL already exists —
-but it does mean the preview target is specifically the `.stl`, and a future
-"3MF only" optimization would break previewing.
+### What this does and does not indict
+
+It does **not** indict the build toolchain. Everything verified about that
+held: the pinned image, the `bin/` shim, docker-in-docker mount semantics,
+inotify seeing nested-container writes, and 0.35 s renders. The failure is
+narrowly in the third-party VS Code 3D-viewer ecosystem, which is thinner
+and worse maintained than its extension count suggests.
+
+For the record, the structural argument for webviews was sound and is not
+what failed: unlike `Antyos.openscad` — which spawned a **native Qt process
+inside the container** needing an X display there — a webview renders in the
+local VS Code UI process on the local GPU. That distinction held up.
+`vscode-3dviewer`'s green screen is a resource-URI bug in a stale extension,
+not the same class of problem.
+
+### Direction: serve the model ourselves
+
+Every failure above is downstream of one decision: **depending on someone
+else's file watcher to trigger someone else's reload.** Serving the model
+from a small local server removes that dependency and, with it, the entire
+class of problem:
+
+- **The reload signal is pushed, not watched.** The watcher sends it after
+  the `mv` completes. Nothing observes the file, so the atomic-rename
+  question is moot and the truncated-read window closes completely — the
+  viewer is never told about a file that is not finished.
+- **Camera is preserved by construction**, because only the geometry is
+  replaced in a live three.js scene; the scene and its `OrbitControls` are
+  never torn down.
+- **Debounce is ours**, so a streamed render cannot cause flicker.
+- **3MF can be served directly** via three.js's `3MFLoader`, removing the
+  constraint below that the preview loop must derive STL for a viewer's
+  sake. initial-design.md already makes 3MF the primary format.
+- **It works in a real browser** — bigger window, better acceleration — as
+  well as in VS Code's Simple Browser tab, via devcontainer port forwarding,
+  which is first-class and needs no extension at all.
+- **No third-party dependency that can regress**, which three of the four
+  extensions above demonstrably did.
+
+The cost is code we own: a static page with three.js + `OrbitControls`, an
+SSE endpoint for the reload signal, and a file handler. Node is already in
+the devcontainer. This is the most work of any option considered, and the
+evidence now justifies it — the cheaper options were tried first and failed
+on their merits, which is the right order to have learned it in.
+
+Run the server on the devcontainer side, **not** inside the toolchain image:
+the toolchain image is deliberately a stateless one-shot command runner, and
+a server inside it would need its port published to the devcontainer and
+then forwarded again.
+
+### Stopgap
+
+If something is wanted before the server exists: `stl-previewer` plus plain
+overwrite works today, at the cost of re-rotating after every save. Usable
+for "did that change what I expected," painful for sustained inspection.
 
 ## Design requirements this imposes on the build
 
-These fall out of the testing and are not optional.
+1. **Renders should still land atomically.** OpenSCAD streams its output: a
+   single STL render produced ~19 incremental writes, with the target file
+   visible and growing throughout. Serving our own model makes this less
+   urgent than it was — nothing watches the file, and the "done" signal is
+   only sent after the render returns — but rendering to a temp path and
+   `mv`-ing into place is still correct, because it keeps a concurrent HTTP
+   GET (a browser refresh mid-render) from reading a partial mesh.
 
-1. **Renders must land atomically.** OpenSCAD streams its output: a single
-   STL render produced ~19 incremental `change` events, with the target file
-   visible and growing the whole time. A viewer reloading on the first event
-   reads a truncated mesh. The build must render to a temp path and `mv` into
-   place — `rename(2)` within a filesystem is atomic, so the final path only
-   ever exists complete.
-
-   This is a constraint **previews impose on the build layer that CI does not
-   care about**, which is worth stating plainly so it doesn't get optimized
-   away later by someone reading only initial-design.md.
+   Worth stating plainly: this is a constraint **previews impose on the build
+   layer that CI does not care about**, so it doesn't get optimized away
+   later by someone reading only initial-design.md.
 
 2. **The temp filename must keep a format-valid suffix.** OpenSCAD infers
    export format from the extension and hard-errors on an unknown one
    (`-o foo.stl.tmp` → *"Invalid suffix tmp"*). Use `.tmp-foo.stl` (dot-
    prefixed, suffix intact) or pass `--export-format` explicitly.
 
-3. **Debounce the source watcher**, per above.
+3. **Debounce the source watcher**, per Part 1.
+
+4. **No STL-for-the-viewer's-sake requirement.** An earlier draft concluded
+   the preview loop had to emit STL specifically, because every candidate
+   extension was STL-only. Serving our own viewer removes that: three.js has
+   a `3MFLoader`, so previews can use the 3MF that initial-design.md already
+   makes primary.
 
 ## How much confidence this deserves
 
-**Proven here, by test:**
+**Proven by test, and load-bearing:**
 
-- inotify sees nested-container writes — the assumption the whole design
-  rests on, and the one most likely to have been silently false.
-- Render speed is a non-issue (0.35 s end-to-end).
-- The truncated-read hazard is real, reproducible, and fixed by atomic rename.
-- `stl-previewer`'s reload path and camera persistence exist in source, in
-  the current release.
+- inotify sees writes made by the **nested toolchain container** — the
+  assumption the whole loop rests on, and the one most likely to have been
+  silently false.
+- Render speed is a non-issue: 0.35 s end-to-end, ~0.20 s of it container
+  startup.
+- The truncated-write hazard is real and reproducible (~19 incremental
+  writes per render), and atomic rename fixes it.
+- The extension route fails, specifically and for three different reasons —
+  see the tables above. This is the finding that changed the design.
 
-**Not proven, and honest about it** — these need a human in the UI, and
-together they are maybe fifteen minutes of checking:
+**Assumed, not yet proven** — these belong to the unbuilt server:
 
-- **The one blocking question:** whether `stl-previewer`'s watcher fires on
-  an *atomic rename*. Its watcher handles `onDidChange`; replacing a file via
-  `mv` gives the path a new inode, which VS Code may surface as a create
-  rather than a change — and the extension does not listen for create. If it
-  misses the event, the fix is cheap (`touch` the file after the `mv`, or
-  drop atomicity and accept occasional truncated reads), but it must be
-  checked, because atomic rename is required by (1) above and could defeat
-  the very reload it's protecting. **This is the thing to test first.**
-- Whether camera persistence actually survives visually, as opposed to
-  reading correct.
-- Whether the webview handles meshes of realistic size smoothly over the
-  remote resource proxy.
+- That a three.js scene can swap geometry without disturbing
+  `OrbitControls`, giving camera preservation by construction. This is
+  ordinary three.js usage rather than a novel trick, but it is the property
+  the whole direction is chosen for and should be the first thing the
+  prototype demonstrates.
+- That devcontainer port forwarding + Simple Browser is as frictionless as
+  expected. Port forwarding is first-class, so the risk is low.
+- That 3MF via `3MFLoader` is as straightforward as STL.
 
-Nothing found so far suggests the approach is unsound; the risk is
-concentrated in that one interaction, and it has a known workaround.
+**What would invalidate the direction:** if swapping geometry in place turns
+out to disturb the camera anyway, the own-server option loses its main
+advantage over `stl-previewer` and the calculus reopens. Cheap to check
+early, and worth checking before writing the file-serving half.
 
 ## Open questions
 
-- Where iteration output lives. Rendering into the committed preview path
-  would keep the working tree permanently dirty while iterating; a gitignored
-  scratch location avoids that. Less fraught than it was when still images
-  were the plan, since the interactive STL is not the reviewed artifact
-  anyway — but it needs deciding once `out/` exists.
-- Whether the watcher runs `make` for the whole tree or a scoped target. Full
-  delegation is correct; a `lib/` edit rebuilding twelve parts mid-iteration
-  may still be slower than wanted.
-- Whether to pin the extension version in `devcontainer.json`. Given that
-  `vscode-3d-preview` regressed its reload in a rewrite, an unpinned
-  `stl-previewer` could do the same. Weighed against the maintenance cost of
-  pinning, and the fact that the last extension added here had to be removed.
-- Fallback if `stl-previewer` disappoints: the 2021 `vscode-3dviewer` has a
-  verified-complete reload path but is four years stale, and a local web
-  server with an own-built viewer (full control over reload and camera, most
-  code to own) remains available.
+- Where iteration output lives. Rendering into a committed path would keep
+  the working tree permanently dirty while iterating; a gitignored scratch
+  location avoids that. Needs deciding once `out/` exists.
+- Whether the watcher runs `make` for the whole tree or a scoped target.
+  Full delegation is correct; a `lib/` edit rebuilding twelve parts
+  mid-iteration may still be slower than wanted.
+- Whether the server serves one part at a time or an index of everything
+  built. The latter is more useful and not much harder, but invites scope
+  creep toward "a whole local gallery," which is not the goal.
+- Whether three.js is vendored into the repo or loaded from a CDN. Vendoring
+  works offline and avoids a network dependency in a tool meant to be fast;
+  it also adds a checked-in third-party asset, which nothing else in this
+  repo currently has (BOSL2 is planned as a submodule, not a vendored copy).
+- Whether this ever merges with the deferred PR-review PNGs. They share the
+  watch loop and the render path; only the output format and the
+  committed/disposable question differ.
 
 ## Current-state caveat
 
@@ -220,8 +279,14 @@ As with the rest of `docs/design/`, this rests partly on unbuilt work:
 `parts/`, `lib/`, `tools/`, and the `Makefile` do not exist yet, so "the
 watcher runs `make`" has nothing to call today.
 
-An interim version is cheap and worth doing first regardless: watch
+An interim version is cheap and worth building first regardless: watch
 `scad/**/*.scad`, render the changed file directly with `bin/openscad` to a
-temp path, `mv` into place, open the result in `stl-previewer`. That answers
-the blocking question above without waiting on the build system, and it is
-the piece of this design most likely to invalidate the rest.
+temp path, `mv` into place, and signal the server. That exercises the whole
+loop against today's flat `scad/` tree, needs none of the unbuilt build
+system, and converts cleanly later — swapping "render the changed file"
+for "run `make`" is the only difference.
+
+Build order that front-loads the risk: **the viewer page first**, served
+from a static file, proving that swapping geometry leaves the camera alone.
+That is the one assumption the direction is chosen for. Only once it holds
+is the watcher and file-serving half worth writing.
