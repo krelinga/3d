@@ -1,215 +1,227 @@
 # Previewing rendered output from the devcontainer
 
-Status: draft — exploring options, nothing settled
+Status: draft — direction chosen, one blocking question left to answer in the UI
 Scope: how someone editing `.scad` in the devcontainer sees the resulting
-geometry, on a fast enough loop to iterate against.
+geometry, interactively and from any angle, on a fast enough loop to iterate
+against.
 
-## Why this is its own problem
+## What this is for
 
 [openscad-image.md](openscad-image.md) dropped `Antyos.openscad` because its
-only real value was live preview, and no GUI application can reach the
-user's screen from a headless container. That was the right call, but it
-left a real gap: **nothing currently closes the edit → look loop.**
+only real value was live preview, and no GUI application can reach the user's
+screen from a headless container. That left the edit → look loop unclosed.
 
-[initial-design.md](initial-design.md) does specify previews — committed
-`preview/<part>/<variant>.png`, fixed camera, freshness-checked by CI — but
-those exist to serve a *different* job, and conflating the two jobs is what
-makes this question confusing:
+**Requirement: the preview must be rotatable.** A fixed-camera image cannot
+answer "is the back of this part right," which is most of what previewing is
+for. That rules out the still-image route as the primary mechanism.
 
-| | **Review** (already designed) | **Iteration** (this doc) |
-|---|---|---|
-| Question it answers | "should this change ship?" | "did my edit do what I meant?" |
-| Audience | PR reviewer, later | the author, right now |
-| Wants | stable, fixed camera, committed, diffable | fast, interactive, disposable |
-| Cadence | once per PR | every few seconds |
+**Deferred, deliberately:** the committed fixed-camera PNGs that
+[initial-design.md](initial-design.md) specifies for PR review are a
+*different feature* answering a different question ("should this ship?", for
+a reviewer, later) and are not designed here. They will likely share the
+watch loop below, and that sharing is worth doing when the time comes — but
+designing both at once conflates two things with opposite requirements
+(disposable/interactive vs. stable/diffable).
 
-They can share machinery, but they should not be assumed to be the same
-feature. A fixed camera is a *feature* for review — initial-design.md is
-explicit that reframing hides the change being reviewed — and a
-*limitation* for iteration, where you often need to rotate to see the side
-that matters.
+Everything below assumes the toolchain design in
+[openscad-image.md](openscad-image.md) and the build design in
+[initial-design.md](initial-design.md) work as written.
 
-## Part 1: the re-render loop
+## The shape
 
-The node-style watcher pattern works here, and the environment assumptions
-it depends on are confirmed rather than assumed.
+```
+    you save foo.scad
+           │
+           ▼
+    ┌─────────────┐   watches the tree, debounces, decides nothing
+    │   watcher   │
+    └──────┬──────┘
+           │ runs
+           ▼
+    ┌─────────────┐   decides what actually needs rebuilding
+    │    make     │   (already has the dependency graph)
+    └──────┬──────┘
+           │ bin/openscad, render to temp + atomic rename
+           ▼
+      out/…/foo.stl
+           │
+           ▼
+    ┌─────────────┐   watches that one file, reloads, keeps your camera
+    │  webview 3D │
+    │  viewer ext │
+    └─────────────┘
+```
 
-**Watching the workspace works.** Verified with Node's `fs.watch` on
-`scad/bases`: an in-place append fired `change`, and an atomic-rename save
-(the pattern many editors use) fired `rename`. Recursive watching works.
+Two independent watchers, which is not a redundancy: ours watches *sources*
+to trigger builds, the extension's watches *one output* to trigger a redraw.
+Neither knows about the other.
 
-The reason this is reliable — worth stating, because bind-mount inotify
-propagation is notoriously flaky in other setups — is that **VS Code Server
-runs inside the container.** Saves are therefore in-container writes, seen
-natively by the container's own kernel. There's no host→container event
-propagation in the path at all, which is the part that breaks on macOS and
-Windows Docker Desktop setups.
+## Part 1: the loop
 
-**Debounce is required, not optional.** The single atomic-rename save above
-produced *two* events. A trailing debounce (~100–200 ms) is the minimum;
-without it a render fires mid-save against a half-written file.
+**The watcher detects; `make` decides.** The watcher should not map
+changed-file → part. `make` already owns the dependency graph (including the
+`openscad -d` files), so delegating gets `lib/` fanout right for free — a
+shared-module edit touching twelve parts is exactly the case a hand-rolled
+watcher gets wrong — and guarantees the loop and a manual `make` do identical
+work.
 
-**The watcher should trigger, not think.** It should run `make` (or
-`make preview`) and let make's dependency graph decide what actually needs
-rebuilding, rather than mapping changed-file → part itself. This reuses the
-`openscad -d` dependency files initial-design.md already specifies, and it
-gets the `lib/` fanout case right for free — a shared-module edit that
-touches twelve parts is exactly the case a hand-rolled watcher would get
-wrong. It also means the watch loop and a manual `make` do identical work,
-so there's no second code path to keep honest.
-
-Note the known gaps initial-design.md documents in those dep files
+The watcher inherits the dep-file gaps initial-design.md already documents
 (`params.json`, `entry.yaml`, and the toolchain image are not recorded by
-`openscad -d`); the watcher inherits those gaps rather than fixing them, and
-should watch those paths explicitly.
+`openscad -d`) and should watch those paths explicitly.
 
-**Speed is not a concern.** Measured through `bin/openscad`, a full
-fixed-camera 800×600 PNG preview of `scad/bases/one_inch.scad` took
-**0.35 s**, of which ~0.20 s is `docker run` startup. That is comfortably
-inside "feels instant" for a save-triggered loop, and it independently
-confirms openscad-image.md's estimate that per-invocation container startup
-would be minor. Caveat: that is a trivial part. Boolean-heavy models will be
-dominated by actual render time, not by the loop.
+**Verified facts** (measured in this devcontainer, not assumed):
 
-**Where it runs: the devcontainer side, invoking `bin/openscad` per render.**
-This keeps one entry point to the toolchain rather than introducing a second
-mechanism. *Rejected alternative:* a long-lived container running the
-toolchain image with the watcher inside it. It would amortize the 0.2 s
-startup, but that 0.2 s is not a problem worth solving, and it would need
-its own lifecycle management (start, restart-on-crash, stop) plus a second
-way of reaching the pinned image — against openscad-image.md's whole
-premise that there is exactly one.
+| | |
+|---|---|
+| inotify fires on the workspace bind mount | ✅ both in-place writes and atomic-rename saves |
+| …for writes made by the **nested toolchain container** | ✅ this is the load-bearing one — see below |
+| Full fixed-camera PNG render via `bin/openscad` | 0.35 s, of which ~0.20 s is `docker run` startup |
+| Node available for the watcher | ✅ v24, `fs.watch` built in, no new install |
 
-**What to write it in: Node, already present** (v24, verified) with
-`fs.watch` built in — no new install. `inotify-tools` is available via apt
-but would mean reintroducing a container install step immediately after
-openscad-image.md deleted the last one.
+The nested-container result matters most: renders are written by a container
+started via docker-in-docker, not by a devcontainer process, and if those
+writes were invisible to inotify the entire auto-reload story would collapse
+regardless of extension quality. They are visible. (The reason the whole
+chain is reliable: VS Code Server runs *inside* the container, so editor
+saves are in-container writes too — no host→container event propagation
+anywhere in the path, which is the part that breaks on Docker Desktop.)
 
-## Part 2: how you actually see it
+**Debounce is required.** A single atomic-rename editor save produced *two*
+inotify events; watchers are noisy generally. A trailing debounce
+(~100–200 ms) is the floor, or renders fire against half-written sources.
 
-Four routes, roughly in increasing order of cost.
+**Where it runs:** devcontainer side, invoking `bin/openscad` per render, via
+`make`. *Rejected:* a long-lived container with the watcher inside it — it
+would amortize the 0.2 s startup, but 0.2 s is not a problem worth solving,
+and it needs its own lifecycle management plus a second way of reaching the
+pinned image, against openscad-image.md's premise that there is exactly one.
 
-### A. PNG into a VS Code image tab
+## Part 2: what displays it
 
-Watcher regenerates the PNG; VS Code shows it in an ordinary editor tab.
-No extension, no server, nothing to maintain.
+### Why a webview extension can work where `Antyos.openscad` could not
 
-The render path is already confirmed working headlessly through the shim
-(the 0.35 s measurement above *is* this path). The strongest argument for
-it: what you look at while iterating is **the same artifact, from the same
-command, that gets committed and diffed in the PR** — the local loop and
-the CI freshness check exercise one code path, so neither can quietly rot.
+Worth being precise, because the surface similarity is misleading.
+`Antyos.openscad` spawned a **native Qt process inside the container**, which
+needed an X display there — hence `qt.qpa.xcb: could not connect to display`.
+A webview extension is structurally different: the extension host runs in the
+container, but the webview renders in the **local** VS Code UI process on the
+local GPU, with VS Code proxying the file out. Nothing needs a display inside
+the container. The previous failure does not recur.
 
-Limits: static, and stuck on `entry.yaml`'s fixed camera. You cannot rotate
-to inspect the back of the part, which is a real constraint for anything
-with meaningful geometry facing away from the camera.
+### Extension survey — read from source, and the obvious pick is wrong
 
-**Needs confirming:** whether VS Code's image preview auto-refreshes when
-the file changes on disk. Believed yes, and cheap to check in the UI — but
-the entire value of this option depends on it, so it should be verified
-before building on it.
+All three candidates were cloned and read, because "has a file watcher" turns
+out not to mean "hot reload works."
 
-### B. STL/3MF + a webview 3D viewer extension
+| Extension | Last commit | Reload path | Verdict |
+|---|---|---|---|
+| [`stl-previewer`](https://github.com/misiekhardcore/stl-previewer) | 2025-10 | watcher → `render()` → replaces `webview.html` | ✅ **recommended** |
+| [`vscode-3d-preview`](https://github.com/tatsy/vscode-3d-preview) | 2025-01 | watcher → `postMessage('modelRefresh')` → **nothing listens** | ❌ dead feature |
+| [`vscode-3dviewer`](https://github.com/stef-levesque/vscode-3dviewer) | 2021-02 | watcher → `postMessage` → listener present and handles it | ⚠️ works, unmaintained |
 
-Several exist ([STL Previewer](https://github.com/misiekhardcore/stl-previewer),
-[3D Viewer for VSCode](https://marketplace.visualstudio.com/items?itemName=slevesque.vscode-3dviewer),
-[3D Model Viewer](https://marketplace.visualstudio.com/items?itemName=planetsensorllc.stl-viewer)),
-all three.js-based, giving real rotate/zoom.
+The trap: **`vscode-3d-preview` looks like the best choice and isn't.** It
+has an explicit `hotReload` setting (default on) and is recent. But it is a
+rewrite of the 2021 `vscode-3dviewer`, and while it kept the extension-side
+`webview.postMessage("modelRefresh")`, its rewritten `media/viewer.js` never
+calls `acquireVsCodeApi()` and registers no `message` listener anywhere. The
+message goes nowhere. The 2021 original it descends from *does* have the
+listener (`media/viewer.js:39` registers it, `:93` handles `modelRefresh`) —
+so the rewrite silently regressed the feature.
 
-**The Antyos failure mode does not recur here, and it's worth being precise
-about why.** `Antyos.openscad` spawned a *native Qt process inside the
-container*, which needed an X display there — hence
-`qt.qpa.xcb: could not connect to display`. A webview extension is
-structurally different: the extension host runs in the container, but the
-webview itself renders in the **local** VS Code UI process using the local
-machine's GPU, with VS Code proxying the mesh data out. Nothing needs a
-display inside the container.
+**`stl-previewer` is the pick**: newest, actively maintained, and its reload
+path is complete. It reloads by replacing the webview HTML wholesale, which
+would normally reset your camera on every save — the exact failure that would
+make this workflow infuriating — except it persists camera position
+explicitly (`RenderState.cameraPosition`, re-applied in `createCamera()`). So
+the angle you rotated to should survive a re-render, which is precisely the
+property this whole approach exists to provide.
 
-Costs: it reintroduces a third-party extension dependency immediately after
-removing one, and these extensions vary in maintenance. The crux unknown is
-**auto-reload** — a custom editor/webview does not necessarily watch its
-file for changes, so the watch loop might still require manually closing and
-reopening the tab, which would defeat most of the point.
+### Consequence: the preview loop must emit STL
 
-### C. Local web server + port forwarding
+All three viewers are STL-only; **none reads 3MF.** initial-design.md makes
+3MF primary and STL derived, so this costs nothing — the STL already exists —
+but it does mean the preview target is specifically the `.stl`, and a future
+"3MF only" optimization would break previewing.
 
-A small server on the devcontainer side (Node is already there), viewed
-either in VS Code's built-in Simple Browser tab or in a real browser on the
-workstation via VS Code's automatic port forwarding.
+## Design requirements this imposes on the build
 
-This is the only option that buys full control: an interactive viewer, live
-reload pushed over SSE/WebSocket the instant a render finishes, several
-variants side by side, and a real browser window that's bigger and better
-accelerated than a VS Code tab.
+These fall out of the testing and are not optional.
 
-It is also by far the most code to write and then own — a server, a client
-viewer, and a reload channel — for something the first two options may
-already cover. Worth building only if A and B both fall short.
+1. **Renders must land atomically.** OpenSCAD streams its output: a single
+   STL render produced ~19 incremental `change` events, with the target file
+   visible and growing the whole time. A viewer reloading on the first event
+   reads a truncated mesh. The build must render to a temp path and `mv` into
+   place — `rename(2)` within a filesystem is atomic, so the final path only
+   ever exists complete.
 
-One constraint if it happens: **run the server on the devcontainer side, not
-inside the toolchain image.** A server inside the toolchain container would
-need its port published to the devcontainer and then forwarded again, and
-the toolchain image is deliberately a stateless one-shot command runner, not
-a service host.
+   This is a constraint **previews impose on the build layer that CI does not
+   care about**, which is worth stating plainly so it doesn't get optimized
+   away later by someone reading only initial-design.md.
 
-### D. Escape hatch: OpenSCAD natively on the workstation
+2. **The temp filename must keep a format-valid suffix.** OpenSCAD infers
+   export format from the extension and hard-errors on an unknown one
+   (`-o foo.stl.tmp` → *"Invalid suffix tmp"*). Use `.tmp-foo.stl` (dot-
+   prefixed, suffix intact) or pass `--export-format` explicitly.
 
-For a local (non-Codespaces) devcontainer, `/workspaces/3d` is a bind mount
-of a directory on the user's own machine. Nothing stops running a real
-OpenSCAD GUI there, pointed at the same files, with its own "Automatic
-Reload and Preview" — which is the best interactive experience available, by
-a wide margin, and requires building nothing.
+3. **Debounce the source watcher**, per above.
 
-The honest caveat: that OpenSCAD is whatever version the workstation has,
-**not** the pinned digest. What you see could differ from what CI builds,
-which is precisely the drift the pinning exists to prevent. That is probably
-fine for "am I sketching the right shape" and not fine for "is this ready to
-tag" — but the distinction has to be held in the user's head, which is
-exactly the kind of thing that eventually bites. Worth naming as a real
-option rather than pretending the container is the only way to look at a
-model.
+## How much confidence this deserves
 
-## Recommendation
+**Proven here, by test:**
 
-Start with **A**, escalate only if it disappoints.
+- inotify sees nested-container writes — the assumption the whole design
+  rests on, and the one most likely to have been silently false.
+- Render speed is a non-issue (0.35 s end-to-end).
+- The truncated-read hazard is real, reproducible, and fixed by atomic rename.
+- `stl-previewer`'s reload path and camera persistence exist in source, in
+  the current release.
 
-It's nearly free, it reuses `make preview` which has to exist anyway for
-CI, and its output is identical to the reviewed artifact — a property none
-of the others have. The likely failure mode is the fixed camera rather than
-the loop mechanics, and that failure will be obvious quickly.
+**Not proven, and honest about it** — these need a human in the UI, and
+together they are maybe fifteen minutes of checking:
 
-If A proves too limited, **B** is the next-cheapest step and its one open
-question (auto-reload) is answerable in an afternoon. **C** should wait
-until there's concrete evidence B can't do the job. **D** is worth knowing
-about regardless — it costs nothing to keep in the back pocket, as long as
-its version-drift caveat stays understood.
+- **The one blocking question:** whether `stl-previewer`'s watcher fires on
+  an *atomic rename*. Its watcher handles `onDidChange`; replacing a file via
+  `mv` gives the path a new inode, which VS Code may surface as a create
+  rather than a change — and the extension does not listen for create. If it
+  misses the event, the fix is cheap (`touch` the file after the `mv`, or
+  drop atomicity and accept occasional truncated reads), but it must be
+  checked, because atomic rename is required by (1) above and could defeat
+  the very reload it's protecting. **This is the thing to test first.**
+- Whether camera persistence actually survives visually, as opposed to
+  reading correct.
+- Whether the webview handles meshes of realistic size smoothly over the
+  remote resource proxy.
+
+Nothing found so far suggests the approach is unsound; the risk is
+concentrated in that one interaction, and it has a known workaround.
 
 ## Open questions
 
-- **Where do iteration renders go?** Writing to the committed
-  `preview/<part>/<variant>.png` path means the working tree is dirty the
-  entire time you're iterating; a gitignored scratch location avoids the
-  churn but gives up option A's main advantage (that you're looking at the
-  exact artifact CI checks). Genuine tension, unresolved.
-- **Does VS Code's image preview auto-refresh on disk change?** Option A
-  depends entirely on it.
-- **Do any of the webview 3D viewers auto-reload on file change?** Option B
-  depends entirely on it.
-- Whether the watcher should render *all* affected parts or only the one
-  being edited — delegating to `make` gets correctness right, but a `lib/`
-  edit rebuilding twelve parts mid-iteration may be slower than wanted.
-- Whether iteration should render PNG (cheap, matches review) or 3MF/STL
-  (needed by B, and by anything interactive), or both.
+- Where iteration output lives. Rendering into the committed preview path
+  would keep the working tree permanently dirty while iterating; a gitignored
+  scratch location avoids that. Less fraught than it was when still images
+  were the plan, since the interactive STL is not the reviewed artifact
+  anyway — but it needs deciding once `out/` exists.
+- Whether the watcher runs `make` for the whole tree or a scoped target. Full
+  delegation is correct; a `lib/` edit rebuilding twelve parts mid-iteration
+  may still be slower than wanted.
+- Whether to pin the extension version in `devcontainer.json`. Given that
+  `vscode-3d-preview` regressed its reload in a rewrite, an unpinned
+  `stl-previewer` could do the same. Weighed against the maintenance cost of
+  pinning, and the fact that the last extension added here had to be removed.
+- Fallback if `stl-previewer` disappoints: the 2021 `vscode-3dviewer` has a
+  verified-complete reload path but is four years stale, and a local web
+  server with an own-built viewer (full control over reload and camera, most
+  code to own) remains available.
 
 ## Current-state caveat
 
-Like the rest of `docs/design/`, this describes a target that partly rests
-on unbuilt work: `parts/`, `lib/`, `tools/`, and the `Makefile` do not
-exist yet, so "the watcher runs `make`" has nothing to call today. The repo
-is currently flat `scad/<category>/*.scad`.
+As with the rest of `docs/design/`, this rests partly on unbuilt work:
+`parts/`, `lib/`, `tools/`, and the `Makefile` do not exist yet, so "the
+watcher runs `make`" has nothing to call today.
 
-An interim version is still possible and cheap — watch `scad/**/*.scad` and
-invoke `bin/openscad` directly per changed file, no make involved — and it
-would answer the two "needs confirming" questions above without waiting for
-the build system. That's probably the right first move regardless of which
-viewing option wins.
+An interim version is cheap and worth doing first regardless: watch
+`scad/**/*.scad`, render the changed file directly with `bin/openscad` to a
+temp path, `mv` into place, open the result in `stl-previewer`. That answers
+the blocking question above without waiting on the build system, and it is
+the piece of this design most likely to invalidate the rest.
