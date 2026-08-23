@@ -7,7 +7,7 @@ set -e
 # The one operative declaration of the toolchain digest, for local dev and CI
 # alike. Bumping it is deliberate and follows the two-commit flow in
 # docs/design/initial-design.md ("A pin bump is necessarily two commits").
-IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e44e46daf3ec9ea477b86b95d2d5c8ef43"
+IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:a5cee318c85619484f0a37dcb982708d3a23cb5b73a1929c85080e73cf90cf35"
 
 # Escape hatch for the gap that two-commit flow creates: between editing the
 # Dockerfile and image.yml publishing a digest, the image you need to test
