@@ -19,6 +19,9 @@ IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e
 # counting ../ levels, which would otherwise break whenever a part is re-shelved
 # into a different category depth. Set here rather than baked into the image:
 # /work is this wrapper's mount layout, not a property of the toolchain.
-exec docker run --rm -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" \
+# -i keeps stdin attached. Without it a piped invocation (`... | python3 -`)
+# silently reads nothing and exits 0, which looks like a no-op rather than an
+# error. Harmless when nothing is piped.
+exec docker run --rm -i -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" \
   -e OPENSCADPATH=/work/lib \
   "$IMAGE" "$(basename "$0")" "$@"
