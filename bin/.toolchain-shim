@@ -1,10 +1,19 @@
 #!/bin/sh
 # Runs the command this script was invoked as (via argv[0], usually a
 # symlink like bin/openscad) inside the pinned toolchain image. See
-# docs/openscad-image.md for why this exists and how it's wired up.
+# docs/design/openscad-image.md for why this exists and how it's wired up.
 set -e
 
+# The one operative declaration of the toolchain digest, for local dev and CI
+# alike. Bumping it is deliberate and follows the two-commit flow in
+# docs/design/initial-design.md ("A pin bump is necessarily two commits").
 IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e44e46daf3ec9ea477b86b95d2d5c8ef43"
+
+# Escape hatch for the gap that two-commit flow creates: between editing the
+# Dockerfile and image.yml publishing a digest, the image you need to test
+# does not exist in the registry yet. Set TOOLCHAIN_IMAGE to a locally built
+# tag to try it before pinning. Never set this in CI.
+[ -n "${TOOLCHAIN_IMAGE:-}" ] && IMAGE="$TOOLCHAIN_IMAGE"
 
 exec docker run --rm -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" \
   "$IMAGE" "$(basename "$0")" "$@"
