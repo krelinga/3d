@@ -271,11 +271,6 @@ PR — not a live in-editor preview. So dropping the extension isn't a gap
 against the target design, it's just not fighting a tool that was never
 going to serve it. Removed from `devcontainer.json`'s extensions list.
 
-## Open questions
-
-- Update `initial-design.md`'s CI section to describe the shim-based
-  approach instead of `container:`, once this is actually implemented.
-
 ## Rejected alternative: toolchain image as the devcontainer's base image
 
 Covered above under Background: tried in `4a9333a`, reverted in `851f5c7`.

@@ -72,10 +72,11 @@ Most of the rest of this document follows from these.
    is declared twice, so nothing can disagree with itself.
    → [The catalog](#the-catalog-one-entryyaml-per-part)
 
-2. **The toolchain is pinned by image digest, in every place that builds.**
+2. **The toolchain is pinned by image digest, declared in exactly one place.**
    There is no current stable OpenSCAD release, and output shifts between
-   snapshots, so "same version" is not a strong enough claim — the devcontainer
-   and all three workflows name one digest.
+   snapshots, so "same version" is not a strong enough claim. How the pin is
+   declared and how local dev and CI both reach it is
+   [its own design doc](openscad-image.md), not repeated here.
    → [Reproducibility](#reproducibility)
 
 3. **Geometry is compared by measurement, never by bytes.** OpenSCAD's output is
@@ -141,9 +142,10 @@ tools/
   metrics.py              # mesh metrics + manifold assertion
   drift.py                # compare metrics against a baseline release
   render_index.py         # regenerate the README index table
+bin/                      # reaches the pinned toolchain image; see openscad-image.md
 Makefile
 .devcontainer/
-  devcontainer.json       # references the pinned digest
+  devcontainer.json
   Dockerfile              # the toolchain image is built from this repo
 .github/workflows/{pr.yml,main.yml,release.yml,image.yml}
 README.md                 # contains a generated index block
@@ -342,8 +344,6 @@ altering any existing one, so it is a minor bump.
   filenames)
 - `camera` is 7 numbers
 - no unrecognized top-level keys (catches `paarams:` and friends)
-- the toolchain digest is identical in `devcontainer.json` and all three build
-  workflows
 
 ### The print metadata is consumed, not decorative
 
@@ -587,9 +587,9 @@ ghcr.io/krelinga/3d/openscad-build@sha256:9f2c...
 ```
 
 built by `image.yml` `FROM openscad/openscad:dev.2026-01-12`, plus `python3`,
-`trimesh`, `pyyaml`, `imagemagick`. The digest is referenced from **both**
-`.devcontainer/devcontainer.json` and every workflow's `container:` key, so
-local and CI builds are the same claim rather than two similar ones.
+`trimesh`, `pyyaml`, `imagemagick`. Exactly where the digest is declared, and
+how local dev and CI both reach it, is [openscad-image.md](openscad-image.md)
+— not repeated here to avoid the two docs drifting apart.
 
 #### The image is built from this repository
 
@@ -599,27 +599,21 @@ Dockerfile beside the digest that references it means a toolchain change and its
 consequences are visible in one place. It graduates to its own repository under
 the same rule as `lib/`: when a second repository needs it, and not before.
 
-Three wrinkles follow from it being in-repo, all of them minor but all of them
-surprising the first time:
+Two wrinkles follow from it being in-repo, both minor but both surprising
+the first time:
 
-- **`image.yml` cannot use `container:`.** Every other workflow runs inside the
-  pinned image; the one that builds that image obviously cannot. It runs bare on
-  `ubuntu-latest`, and it is the only workflow that does. It needs
-  `permissions: packages: write`.
+- **`image.yml` needs `permissions: packages: write`.** It's the one workflow
+  that pushes to the registry rather than pulling from it — every other
+  workflow reaches the pinned image read-only, and (see
+  [openscad-image.md](openscad-image.md)) none of them run inside it via
+  `container:`, `image.yml` included.
 - **A pin bump is necessarily two commits.** The new digest does not exist until
   the image is built and pushed, so the Dockerfile edit and the digest update
   cannot be the same PR. Flow: merge the Dockerfile change → `image.yml` builds
-  and pushes → the digest is now known → update the references. Between the two,
-  `main` still builds on the old image, which is correct, not broken.
-  **Recommended:** have `image.yml` open the second PR itself, with the new
-  digest substituted into `devcontainer.json` and the workflows. Merging that
-  bot PR then trips the repo-wide rebaseline issue described under drift
-  detection, which is exactly the intended sequence.
-- **The digest appears in four files** (`devcontainer.json` and three
-  workflows), which is the duplication this design keeps trying to delete.
-  Rather than add indirection that `devcontainer.json` cannot follow anyway,
-  `make check` asserts that all four occurrences are byte-identical. One place
-  to edit, four places verified.
+  and pushes → the digest is now known → update the reference. Between the two,
+  `main` still builds on the old image, which is correct, not broken. Where
+  that reference lives, and how many places need updating, is
+  [openscad-image.md](openscad-image.md)'s concern.
 
 Bumping the pin is a deliberate PR. Expect it to change output — see the
 rebaseline case below.
@@ -707,7 +701,9 @@ in the PR. Cruder, but it has no floating-point behaviour at all.
 
 ## CI
 
-All workflows run in the pinned image via `container:`, check out with
+All workflows run against the pinned toolchain image — see
+[openscad-image.md](openscad-image.md) for exactly how a workflow reaches
+it, which is not via GitHub Actions' `container:` key — check out with
 `submodules: recursive`, and declare minimal `permissions:`.
 
 ### On every PR — build everything
@@ -882,7 +878,8 @@ being discovered on the print bed.
 
 Third-party libraries (BOSL2) are git submodules pinned to a release tag, not
 vendored copies, so the pin is legible in `git log`. `OPENSCADPATH` is set in
-the image and in `devcontainer.json` to point at `lib/`.
+the image to point at `lib/`; how that reaches a local invocation is
+[openscad-image.md](openscad-image.md)'s concern, not settled here.
 
 If `lib/` grows enough to be reused across repositories, it becomes **its own
 repository consumed as a submodule** — not an additional tag namespace inside
