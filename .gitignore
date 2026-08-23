@@ -5,3 +5,7 @@ thumbnails/**/.tmp-*
 
 # Live preview server scratch.
 viewer/.cache/
+
+# Python bytecode from the tools running inside the container.
+__pycache__/
+*.pyc

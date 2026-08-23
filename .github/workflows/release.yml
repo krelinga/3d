@@ -1,0 +1,143 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      part:
+        description: Part name (the leaf directory name, e.g. one-inch)
+        required: true
+        type: string
+      ref:
+        description: Ref to release from
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: write     # create the tag, the release, and the README index commit
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Resolve the part and read its declared version
+        id: part
+        run: |
+          make check
+          name='${{ inputs.part }}'
+          # catalog.py resolves name -> path; a part's path cannot be
+          # constructed from its name, because categories are not in the name.
+          path=$(./bin/python3 tools/catalog.py --path "$name")
+          version=$(./bin/python3 tools/catalog.py --version "$name")
+          tag="$name/v$version"
+          echo "name=$name"       >> "$GITHUB_OUTPUT"
+          echo "path=$path"       >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"         >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag from $path"
+
+      - name: Refuse if that tag already exists
+        run: |
+          tag='${{ steps.part.outputs.tag }}'
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists. Bump version in entry.yaml first."
+            exit 1
+          fi
+
+      # Clean build of just this part, so the assets cannot include anything
+      # stale from an earlier version's filenames.
+      - name: Clean build
+        run: |
+          make clean
+          make -j"$(nproc)"
+          make thumbnails
+
+      - name: Assemble the release assets
+        id: assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          name='${{ steps.part.outputs.name }}'
+          version='${{ steps.part.outputs.version }}'
+          mkdir -p release
+          cp out/"$name"/*.3mf out/"$name"/*.stl release/
+
+          image=$(grep -o 'ghcr.io/[^"]*' bin/.toolchain-shim)
+          ./bin/python3 tools/build_record.py \
+            --part "$name" \
+            --release "${{ steps.part.outputs.tag }}" \
+            --commit "$GITHUB_SHA" \
+            --image "$image" \
+            --out release/build-record.json
+
+          ./bin/python3 tools/print_md.py --part "$name" \
+            --out "release/$name-v$version-PRINT.md"
+
+          ( cd release && sha256sum ./* > SHA256SUMS )
+          ls -la release/
+
+          # Release notes from the metrics diff against the previous release of
+          # this part, not a flat commit log.
+          prev=$(gh release list --limit 200 --json tagName \
+            --jq "[.[] | select(.tagName | startswith(\"$name/v\")) | .tagName] | first" \
+            2>/dev/null || true)
+          {
+            echo "## $name v$version"
+            echo ""
+            if [ -n "$prev" ] && [ "$prev" != "null" ]; then
+              mkdir -p baselines
+              gh release download "$prev" --pattern build-record.json \
+                --output "baselines/$name.build-record.json" 2>/dev/null || true
+              echo "Changes since \`$prev\`:"
+              echo ""
+              echo '```'
+              ./bin/python3 tools/drift.py --baselines baselines --image "$image" \
+                2>/dev/null | sed -n "/$name/,/^$/p" || echo "(no comparable baseline)"
+              echo '```'
+            else
+              echo "First release of this part."
+            fi
+            echo ""
+            echo "Built from \`$GITHUB_SHA\` with \`$image\`."
+          } > release-notes.md
+
+      - name: Create the tag
+        run: |
+          # CI creates the tag, so it cannot disagree with the catalog.
+          git tag '${{ steps.part.outputs.tag }}'
+          git push origin '${{ steps.part.outputs.tag }}'
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # --latest=false: GitHub's "Latest" badge is repo-wide, so with
+          # interleaved per-part releases it would always be misleading.
+          gh release create '${{ steps.part.outputs.tag }}' \
+            --title '${{ steps.part.outputs.name }} v${{ steps.part.outputs.version }}' \
+            --notes-file release-notes.md \
+            --latest=false \
+            release/*
+
+      - name: Refresh the README index on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin main
+          git checkout main
+          ./bin/python3 tools/render_index.py
+          if git diff --quiet -- README.md; then
+            echo "index already current"
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add README.md
+          git commit -m "Update README index for ${{ steps.part.outputs.tag }}"
+          git push origin main

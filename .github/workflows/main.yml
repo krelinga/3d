@@ -1,0 +1,110 @@
+name: main
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - parts/**
+      - lib/**
+      - tools/**
+      - Makefile
+      - bin/**
+
+permissions:
+  contents: read
+  issues: write        # drift is filed as an issue, not a failed check
+
+concurrency:
+  group: main-drift
+  cancel-in-progress: false   # each merge's answer matters; do not drop one
+
+jobs:
+  drift:
+    # Drift detection converts an observation into durable state. It runs after
+    # merge rather than in the PR because re-tagging is a release decision
+    # usually made later, and because a shared-library change can move a dozen
+    # parts whose versions should mostly not be bumped. See
+    # docs/design/initial-design.md, "What drift detection is for".
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - run: make check
+      - run: make -j"$(nproc)"
+
+      - name: Fetch each part's most recent release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p baselines
+          for part in $(./bin/python3 tools/catalog.py --list); do
+            tag=$(gh release list --limit 200 --json tagName \
+              --jq "[.[] | select(.tagName | startswith(\"$part/v\")) | .tagName] | first" \
+              2>/dev/null || true)
+            if [ -n "$tag" ] && [ "$tag" != "null" ]; then
+              gh release download "$tag" --pattern build-record.json \
+                --output "baselines/$part.build-record.json" 2>/dev/null || true
+            fi
+          done
+
+      - name: Measure drift
+        id: drift
+        run: |
+          image=$(grep -o 'ghcr.io/[^"]*' bin/.toolchain-shim)
+          ./bin/python3 tools/drift.py --baselines baselines --image "$image" \
+            --json > drift.json
+          ./bin/python3 tools/drift.py --baselines baselines --image "$image" \
+            | tee drift.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: File or update drift issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const d = JSON.parse(fs.readFileSync('drift.json', 'utf8'));
+            const {owner, repo} = context.repo;
+            const sha = context.sha.slice(0, 8);
+
+            const upsert = async (title, body, label) => {
+              const found = await github.rest.issues.listForRepo({
+                owner, repo, state: 'open', labels: label, per_page: 100});
+              const hit = found.data.find(i => i.title === title);
+              if (hit) {
+                // Update in place: after three merges each touching lib/, a
+                // part has drifted once cumulatively, not three times.
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: hit.number, body});
+              } else {
+                await github.rest.issues.create({
+                  owner, repo, title, body, labels: [label]});
+              }
+            };
+
+            // A toolchain bump moves nearly every part at once. One rebaseline
+            // issue, not N -- otherwise the first pin bump buries its own signal.
+            if (d.rebaseline) {
+              await upsert(
+                'Toolchain moved: re-baseline affected parts',
+                `Toolchain digest changed as of ${sha}.\n\n` +
+                `${d.toolchain_moved.length} part(s) show geometry change: ` +
+                `${d.toolchain_moved.join(', ')}\n\n` +
+                'Review and re-tag as needed. This is expected after a pin bump ' +
+                'and is not by itself a problem.',
+                'rebaseline');
+              return;
+            }
+
+            for (const part of d.drift) {
+              await upsert(
+                `Drift: ${part.part} output changed without a version bump`,
+                `As of ${sha}, \`${part.part}\` still declares ` +
+                `v${part.declared_version} (released v${part.released_version}) ` +
+                `but builds different geometry:\n\n` +
+                part.reasons.map(r => `- ${r}`).join('\n') +
+                '\n\nThis is a bookkeeping fact, not a failure. It asks one ' +
+                'question: is this worth a release? If yes, bump the version in ' +
+                "entry.yaml and run release.yml. If not, close this.",
+                'drift');
+            }
