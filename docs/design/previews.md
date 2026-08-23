@@ -271,16 +271,21 @@ is integration work, not risk.
   CLI argument) or an index of everything built. The latter is more useful
   and not much harder, but invites scope creep toward "a whole local
   gallery," which is not the goal.
-- Whether three.js is vendored. The prototype pins `0.185.1` via importmap
-  from unpkg, which works but means no preview offline or if the CDN is
-  unreachable. Three options, in increasing weight: keep the pinned CDN;
-  fetch once into the gitignored cache and serve locally thereafter
-  (offline after first run, nothing checked in); or vendor properly. The
-  middle option looks best and was not built only because the prototype did
-  not need it.
 - Whether this ever merges with the deferred PR-review PNGs. They share the
   watch loop and the render path; only the output format and the
   committed/disposable question differ.
+
+## Possible future improvements
+
+Not blocking, and not currently planned — recorded so they are not
+rediscovered from scratch.
+
+- **Serve three.js locally.** The viewer pins `0.185.1` via importmap from
+  unpkg, so there is no preview without network access to the CDN. Fetching
+  it once into the gitignored cache and serving it from there would make the
+  viewer work offline after first run without checking a third-party asset
+  into the repo. Deliberately deferred: it costs a little complexity for a
+  case (working offline) that has not actually come up.
 
 ## Current-state caveat
 
