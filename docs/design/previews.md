@@ -15,7 +15,7 @@ screen from a headless container. That left the edit → look loop unclosed.
 answer "is the back of this part right," which is most of what previewing is
 for. That rules out the still-image route as the primary mechanism.
 
-**Deferred, deliberately:** the committed fixed-camera PNGs that
+**Deferred, deliberately:** the committed fixed-camera **thumbnails** that
 [initial-design.md](initial-design.md) specifies for PR review are a
 *different feature* answering a different question ("should this ship?", for
 a reviewer, later) and are not designed here. They will likely share the
@@ -77,7 +77,7 @@ The watcher inherits the dep-file gaps initial-design.md already documents
 |---|---|
 | inotify fires on the workspace bind mount | ✅ both in-place writes and atomic-rename saves |
 | …for writes made by the **nested toolchain container** | ✅ this is the load-bearing one — see below |
-| Full fixed-camera PNG render via `bin/openscad` | 0.35 s, of which ~0.20 s is `docker run` startup |
+| Full fixed-camera thumbnail render via `bin/openscad` | 0.35 s, of which ~0.20 s is `docker run` startup |
 | Node available for the watcher | ✅ v24, `fs.watch` built in, no new install |
 
 The nested-container result matters most: renders are written by a container
@@ -271,7 +271,7 @@ is integration work, not risk.
   CLI argument) or an index of everything built. The latter is more useful
   and not much harder, but invites scope creep toward "a whole local
   gallery," which is not the goal.
-- Whether this ever merges with the deferred PR-review PNGs. They share the
+- Whether this ever merges with the deferred thumbnails. They share the
   watch loop and the render path; only the output format and the
   committed/disposable question differ.
 

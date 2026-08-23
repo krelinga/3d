@@ -48,7 +48,7 @@ another has gone stale.
   to a three.js viewer that preserves the camera across re-renders.
 
 **Not built yet** — `parts/`, `lib/`, `tools/`, the `Makefile`, the committed
-`preview/` PNGs, and the `pr.yml` / `main.yml` / `release.yml` workflows. The
+`thumbnails/` PNGs, and the `pr.yml` / `main.yml` / `release.yml` workflows. The
 models still live flat under `scad/<category>/*.scad`, and `generate.sh` is a
 one-off hardcoded to a personal `/nas/dev/3d` path — not a general build tool
 and not worth extending.

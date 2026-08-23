@@ -35,6 +35,8 @@ conflate.
 | **Variant** | One parameterization of a part (`m5_short`). Shares its part's version; ships as its own file. |
 | **Catalog** | The set of `entry.yaml` files. Hand-authored, committed. Declares **intent** — what should exist, at what version. |
 | **Build record** | `build-record.json`, generated per release, never committed. Records **outcome** — what actually came out, and from which toolchain. |
+| **Thumbnail** | A committed PNG of one variant, fixed camera, diffed on GitHub during review. |
+| **Preview** | The live, rotatable render used while editing. Never committed; see [previews.md](previews.md). |
 | **Metrics** | Bounding box, volume, and area measured from a built mesh. The comparable summary of geometry. |
 | **Baseline** | The metrics from a part's most recent release. What current output is compared against. |
 | **Drift** | A part whose output has changed but whose declared version has not. |
@@ -50,7 +52,7 @@ you meant, the other is what happened.
              ▼
    ┌──────────────────┐   pr.yml
    │   pull request   │   build every part · assert every mesh · refresh
-   └────────┬─────────┘   previews · post a metrics diff as a comment
+   └────────┬─────────┘   thumbnails · post a metrics diff as a comment
             │ merge
             ▼
    ┌──────────────────┐   main.yml
@@ -81,7 +83,7 @@ Most of the rest of this document follows from these.
 
 3. **Geometry is compared by measurement, never by bytes.** OpenSCAD's output is
    not reproducible even run to run, so every comparison in this design —
-   change detection, release notes, preview freshness — is a tolerance check on
+   change detection, release notes, thumbnail freshness — is a tolerance check on
    measured quantities rather than a hash.
    → [Reproducibility](#2-output-is-not-deterministic-run-to-run)
 
@@ -101,7 +103,7 @@ not an option here.
 | Channel | Use | Notes |
 |---|---|---|
 | **Release assets** | Primary distribution | Permanent, unauthenticated download URLs on public repos. 2 GB per file. |
-| **Actions artifacts** | PR / branch previews | Default 90-day retention. Fine for non-durable previews. |
+| **Actions artifacts** | PR / branch build artifacts | Default 90-day retention. Fine for non-durable output. |
 | **ghcr.io via ORAS** | Not used | Technically possible to push arbitrary files as OCI artifacts, but requires consumers to run `oras`. Rejected as user-hostile for this use case. |
 | **ghcr.io (container)** | Build image | Used, but for the pinned toolchain image — not for models. |
 
@@ -111,9 +113,9 @@ GitHub renders committed `.stl` files under 10 MB with an interactive 3D viewer.
 It does **not** offer a before/after diff for them — the revision slider was
 removed. Images, by contrast, still get the full 2-up / swipe / onion-skin diff.
 
-The consequence is not cosmetic: **the committed preview PNGs are the only
+The consequence is not cosmetic: **the committed thumbnails are the only
 visual diff available.** That makes them load-bearing rather than decorative,
-and it settles the preview decision below.
+and it settles the thumbnail decision below.
 
 ## Repository layout
 
@@ -130,9 +132,9 @@ parts/                    # parts may be nested in category directories
 lib/
   krelinga/               # own shared modules
   BOSL2/                  # submodule, pinned to a release tag
-preview/
+thumbnails/               # committed PNGs for PR review; see Thumbnails
   bracket/
-    m5_short.png          # committed, one per variant
+    m5_short.png          # one per variant
     m5_long.png
   spool-holder/
     spool-holder.png      # single-variant part; categories are not mirrored here
@@ -193,7 +195,7 @@ parts/
 
 **The part name is the leaf directory name, never the path.** `2020-corner`
 releases as tag `2020-corner/v2.3`, builds to `2020-corner-v2.3-m5_short.3mf`,
-previews to `preview/2020-corner/m5_short.png`. Nothing downstream of the
+thumbnails to `thumbnails/2020-corner/m5_short.png`. Nothing downstream of the
 catalog knows or cares which category a part sits in.
 
 Two things follow. **Categories are free to reorganize** — re-shelving a part is
@@ -271,7 +273,7 @@ variants:
     param_set: m5_short       # → openscad -P m5_short
   - name: m5_long
     param_set: m5_long
-camera: [0, 0, 0, 55, 0, 25, 140]   # fixed preview camera, see Previews
+camera: [0, 0, 0, 55, 0, 25, 140]   # fixed thumbnail camera, see Thumbnails
 print:
   layer_height: 0.2
   infill: 40
@@ -510,18 +512,18 @@ BUILD    := build
 # $(wildcard) has no ** — find is the only way to reach nested parts.
 PARTS    := $(shell find parts -name entry.yaml)
 
-.PHONY: all check preview clean
+.PHONY: all check thumbnails clean
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) tools/gen_rules.py
 	@mkdir -p $(BUILD)
 	python3 tools/gen_rules.py > $@
 
--include $(BUILD)/parts.mk        # defines ARTIFACTS and PREVIEWS
+-include $(BUILD)/parts.mk        # defines ARTIFACTS and THUMBNAILS
 
 # Both targets come after the include, so the variables are already defined.
 all: $(ARTIFACTS)
-preview: $(PREVIEWS)
+thumbnails: $(THUMBNAILS)
 
 check:
 	python3 tools/catalog.py --validate
@@ -650,13 +652,13 @@ shared `lib/krelinga/defaults.scad` included by every part rather than inheritin
 whatever the snapshot ships, so a toolchain bump does not silently retessellate
 every curve.
 
-## Previews
+## Thumbnails
 
-**Two different things get called "preview" in this repo.** They answer
-different questions and have nearly opposite requirements, so keeping them
-apart matters:
+**Two visual representations exist in this repo, and they are named apart on
+purpose.** They answer different questions and have nearly opposite
+requirements:
 
-| | **Review previews** — this section | **Iteration previews** — [previews.md](previews.md) |
+| | **Thumbnails** — this section | **Previews** — [previews.md](previews.md) |
 |---|---|---|
 | Question | "should this change ship?" | "did my edit do what I meant?" |
 | Audience | a PR reviewer, later | the author, right now |
@@ -664,8 +666,9 @@ apart matters:
 | Lifetime | versioned in git, diffed on GitHub | disposable, never committed |
 | Camera | deliberately fixed, so a diff shows only what moved | freely orbited, and preserved across re-renders |
 
-The rest of this section specifies the first. The second has
-[its own design doc](previews.md), and exists for two reasons this design
+**"Thumbnail" always means the committed PNG; "preview" always means the live
+interactive one.** The rest of this section specifies thumbnails. Previews have
+[their own design doc](previews.md), and exist for two reasons this design
 creates but does not solve: the devcontainer is headless, so no OpenSCAD GUI
 can reach the screen, and a fixed-camera still image cannot answer "is the
 back of this part right." Broadly, it works by watching sources, re-rendering
@@ -676,16 +679,16 @@ The two are expected to share the watch loop and the render path eventually —
 only the output format and the committed/disposable question differ — but
 that merge is deferred rather than assumed.
 
-One committed PNG per variant, rendered by `make preview`, committed by you,
-with CI verifying freshness.
+One committed PNG per variant, rendered by `make thumbnails`, committed by
+you, with CI verifying freshness.
 
 Rationale: with no STL revision diff on GitHub, the PNG diff is the only visual
 review available, and it needs to be in the PR — which rules out a bot that
 commits regenerated images after merge. Size is not a concern: an 800×600 render
 is roughly 60 KB, so 20 parts × 3 variants is about 4 MB.
 
-Path is `preview/<part>/<variant>.png`; a single-variant part renders to
-`preview/<part>/<part>.png`, mirroring how the variant suffix drops out of the
+Path is `thumbnails/<part>/<variant>.png`; a single-variant part renders to
+`thumbnails/<part>/<part>.png`, mirroring how the variant suffix drops out of the
 artifact filenames.
 
 ### Fixed camera per part
@@ -700,7 +703,7 @@ openscad --backend=manifold --render \
          --imgsize=800,600 --camera=0,0,0,55,0,25,140 \
          --colorscheme=Tomorrow \
          -p parts/bracket/params.json -P m5_short \
-         -o preview/bracket/m5_short.png parts/bracket/source.scad
+         -o thumbnails/bracket/m5_short.png parts/bracket/source.scad
 ```
 
 Headless rendering works without X on dev snapshots (built-in EGL). On a release
@@ -716,12 +719,12 @@ changed. Byte comparison would be permanently red.
 CI compares with ImageMagick and fails only past a threshold:
 
 ```sh
-compare -metric AE -fuzz 2% preview/bracket/m5_short.png /tmp/regen.png null:
+compare -metric AE -fuzz 2% thumbnails/bracket/m5_short.png /tmp/regen.png null:
 # fail if AE > 0.5% of total pixels
 ```
 
 *Alternative if that proves flaky:* drop the pixel check and instead fail when
-the metrics diff says geometry changed but no file under `preview/` was touched
+the metrics diff says geometry changed but no file under `thumbnails/` was touched
 in the PR. Cruder, but it has no floating-point behaviour at all.
 
 ## CI
@@ -742,13 +745,13 @@ rather than hidden.
 2. Build all parts and all variants (`make -j`).
 3. Per-mesh assertions: watertight, consistent winding, volume > 0, facets > 0.
    A zero-volume or empty result is a build failure, not a small file.
-4. Regenerate previews; verify committed PNGs are fresh (above).
+4. Regenerate thumbnails; verify the committed ones are fresh (above).
 5. Diff metrics against each part's most recent release; post the summary as a
    PR comment.
 6. Upload the whole `out/` tree as an Actions artifact.
 
 **The metrics comment never fails the check.** Steps 1–4 are pass/fail: a broken
-catalog, a build error, a non-manifold mesh, or a stale preview all block the
+catalog, a build error, a non-manifold mesh, or a stale thumbnail all block the
 merge, because each is unambiguously wrong. Step 5 is not — a changed volume is
 information, and whether it is acceptable is a judgement made by whoever
 approves the PR, who has the comment in front of them at that moment.
@@ -778,7 +781,7 @@ and the only thing it ever asks for is a decision about whether to re-tag.
 That framing settles both its scope and its timing:
 
 - **Scope: declared-version honesty, nothing else.** Whether the geometry is
-  *good* is the PR reviewer's job, helped by the preview diff. Whether the mesh
+  *good* is the PR reviewer's job, helped by the thumbnail diff. Whether the mesh
   is *valid* is the per-mesh assertion's job, and that one does fail the build.
   Drift only compares "what does the catalog claim" against "what came out."
 - **Timing: it runs after merge, on `main`.** The PR already posts the same
@@ -846,7 +849,7 @@ Input: part name. Optional input: ref (defaults to `main`).
 1. `make check`; ask `catalog.py` to resolve the part name to its directory;
    read `version` from its `entry.yaml`.
 2. Refuse if tag `<name>/v<version>` already exists.
-3. Clean full build of that part only, plus previews.
+3. Clean full build of that part only, plus thumbnails.
 4. Create and push the tag at the selected ref.
 5. Attach: `.3mf` and `.stl` per variant, `build-record.json`,
    `<name>-v<version>-PRINT.md`, and `SHA256SUMS`.
@@ -869,15 +872,15 @@ section — untouched:
 <!-- BEGIN INDEX -->
 ### printer-mods
 
-| Part | Version | Release | Preview |
+| Part | Version | Release | Thumbnail |
 |---|---|---|---|
-| spool-holder | 1.4 | [spool-holder/v1.4](…) | ![](preview/spool-holder/spool-holder.png) |
+| spool-holder | 1.4 | [spool-holder/v1.4](…) | ![](thumbnails/spool-holder/spool-holder.png) |
 
 ### Uncategorized
 
-| Part | Version | Release | Preview |
+| Part | Version | Release | Thumbnail |
 |---|---|---|---|
-| bracket | 2.3 | [bracket/v2.3](…) | ![](preview/bracket/m5_short.png) |
+| bracket | 2.3 | [bracket/v2.3](…) | ![](thumbnails/bracket/m5_short.png) |
 <!-- END INDEX -->
 ```
 
