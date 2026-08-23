@@ -39,7 +39,7 @@ nothing else installed. See `docs/design/openscad-image.md`.
 For a live, rotatable preview that re-renders as you save:
 
 ```sh
-node viewer/server.mjs one-inch
+node viewer/server.mjs minibase-one-inch
 ```
 
 then open the forwarded port. See `docs/design/previews.md`.
@@ -55,7 +55,7 @@ uses.
 ```sh
 ./bin/openscad --backend=manifold \
     -D some_parameter=6 \
-    -o my-variant.3mf parts/bases/one-inch/source.scad
+    -o my-variant.3mf parts/bases/minibase-one-inch/source.scad
 ```
 
 Nothing in the repo needs to change to support that, which is why the blessed
@@ -78,9 +78,9 @@ a `variants:` entry to `entry.yaml`.
 
 | Part | Version | Description | Release | Thumbnail |
 |---|---|---|---|---|
-| `40mm-heavy` | 1.0 | Large round miniature base with a wide recess for a weight or magnet (radius 40mm, i.e. 80mm across) | [40mm-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/40mm-heavy%2Fv1.0) | ![40mm-heavy](thumbnails/40mm-heavy/40mm-heavy.png) |
-| `four-fifths-inch` | 1.0 | Four-fifths-inch round miniature base with a shallow centre recess | [four-fifths-inch/v1.0](https://github.com/krelinga/3d/releases/tag/four-fifths-inch%2Fv1.0) | ![four-fifths-inch](thumbnails/four-fifths-inch/four-fifths-inch.png) |
-| `one-inch` | 1.0 | One-inch round miniature base with a shallow centre recess | [one-inch/v1.0](https://github.com/krelinga/3d/releases/tag/one-inch%2Fv1.0) | ![one-inch](thumbnails/one-inch/one-inch.png) |
-| `one-inch-heavy` | 1.0 | One-inch round miniature base with a wide recess for a weight or magnet | [one-inch-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/one-inch-heavy%2Fv1.0) | ![one-inch-heavy](thumbnails/one-inch-heavy/one-inch-heavy.png) |
-| `two-inch-heavy` | 1.0 | Two-inch round miniature base with a wide recess for a weight or magnet | [two-inch-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/two-inch-heavy%2Fv1.0) | ![two-inch-heavy](thumbnails/two-inch-heavy/two-inch-heavy.png) |
+| `minibase-40mm-heavy` | 1.0 | Large round miniature base with a wide recess for a weight or magnet (radius 40mm, i.e. 80mm across) | [minibase-40mm-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/minibase-40mm-heavy%2Fv1.0) | ![minibase-40mm-heavy](thumbnails/minibase-40mm-heavy/minibase-40mm-heavy.png) |
+| `minibase-four-fifths-inch` | 1.0 | Four-fifths-inch round miniature base with a shallow centre recess | [minibase-four-fifths-inch/v1.0](https://github.com/krelinga/3d/releases/tag/minibase-four-fifths-inch%2Fv1.0) | ![minibase-four-fifths-inch](thumbnails/minibase-four-fifths-inch/minibase-four-fifths-inch.png) |
+| `minibase-one-inch` | 1.0 | One-inch round miniature base with a shallow centre recess | [minibase-one-inch/v1.0](https://github.com/krelinga/3d/releases/tag/minibase-one-inch%2Fv1.0) | ![minibase-one-inch](thumbnails/minibase-one-inch/minibase-one-inch.png) |
+| `minibase-one-inch-heavy` | 1.0 | One-inch round miniature base with a wide recess for a weight or magnet | [minibase-one-inch-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/minibase-one-inch-heavy%2Fv1.0) | ![minibase-one-inch-heavy](thumbnails/minibase-one-inch-heavy/minibase-one-inch-heavy.png) |
+| `minibase-two-inch-heavy` | 1.0 | Two-inch round miniature base with a wide recess for a weight or magnet | [minibase-two-inch-heavy/v1.0](https://github.com/krelinga/3d/releases/tag/minibase-two-inch-heavy%2Fv1.0) | ![minibase-two-inch-heavy](thumbnails/minibase-two-inch-heavy/minibase-two-inch-heavy.png) |
 <!-- END INDEX -->

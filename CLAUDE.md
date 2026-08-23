@@ -70,7 +70,7 @@ is equivalent and works regardless of `PATH`.
 Live preview while editing (then open the forwarded port 5173):
 
 ```sh
-node viewer/server.mjs one-inch      # --format stl|3mf, --port N
+node viewer/server.mjs minibase-one-inch      # --format stl|3mf, --port N
 ```
 
 There is no test suite, linter, or CI beyond `image.yml` yet.

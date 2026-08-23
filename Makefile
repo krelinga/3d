@@ -22,10 +22,17 @@ THUMB_COLORSCHEME ?= Tomorrow
 # $(wildcard) has no ** -- find is the only way to reach nested parts.
 PARTS := $(shell find parts -name entry.yaml 2>/dev/null)
 
+# The directories matter as well as the files. Renaming a part with `git mv`
+# preserves entry.yaml's mtime, so parts.mk would still look up to date and
+# make would reuse rules naming paths that no longer exist. A directory's
+# mtime does change when a child is added, removed or renamed, so depending on
+# the directories catches exactly the cases the file list cannot.
+PART_DIRS := $(shell find parts -type d 2>/dev/null)
+
 .PHONY: all check thumbnails clean help
 .DEFAULT_GOAL := all
 
-$(BUILD)/parts.mk: $(PARTS) tools/gen_rules.py tools/catalog.py
+$(BUILD)/parts.mk: $(PARTS) $(PART_DIRS) tools/gen_rules.py tools/catalog.py
 	@mkdir -p $(BUILD)
 	$(PYTHON) tools/gen_rules.py > $@
 
