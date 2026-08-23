@@ -55,21 +55,27 @@ through a different mechanism (`docker run` locally vs. GitHub Actions'
 
 ## Requirements this needs to satisfy
 
-- **File ownership.** The toolchain image likely runs as root by default, so
-  anything a naive `docker run` writes back into the bind-mounted workspace
-  (`.stl`/`.3mf`/preview PNGs) comes back root-owned, which breaks the
-  non-root `vscode` user's ability to touch its own output. Whatever wrapper
-  we write needs `--user "$(id -u):$(id -g)"` (or equivalent) built in, not
-  left as a thing people rediscover the hard way.
+- **File ownership — confirmed both the problem and the fix.** A plain
+  `docker run` writing into the bind-mounted workspace comes back
+  `root:root`-owned, as expected (reproduced with the same `alpine:3` test
+  used for the mount-semantics check above) — not something the `vscode`
+  user can clean up without `sudo`. Adding `--user "$(id -u):$(id -g)"`
+  fixes it: the same write comes back owned by `vscode:vscode` and is
+  removable without `sudo`. Whatever wrapper we write needs this built in,
+  not left as a thing people rediscover the hard way.
 
-- **Docker-in-Docker mount semantics need to be verified, not assumed.**
-  Docker-in-Docker runs a real nested `dockerd`. Whether a bind mount like
-  `-v "$PWD:/work"`, issued from inside the devcontainer against that nested
-  daemon, actually resolves to the expected files depends on the nested
-  daemon sharing the same filesystem view as the devcontainer shell. That's
-  usually true for this devcontainer feature, but it's an assumption, and
-  it's cheap to prove with one throwaway `docker run` before writing anything
-  that depends on it. **Not yet tested.**
+- **Docker-in-Docker mount semantics — confirmed working.** Docker-in-Docker
+  runs a real nested `dockerd` (verified: a `dockerd` process running inside
+  the devcontainer itself, `docker info` reporting `Operating System: Ubuntu
+  24.04.3 LTS (containerized)`, hostname matching the devcontainer's own
+  container ID — this is the nested daemon, not a host-socket passthrough).
+  Tested a full round trip from inside the devcontainer: wrote a marker file
+  into the workspace, bind-mounted `$PWD` into a plain `alpine:3` container
+  run against the nested daemon, read the marker back correctly inside the
+  container, wrote a new file from inside the container, and confirmed it
+  appeared back in the workspace on the host side. The nested daemon shares
+  the devcontainer's filesystem view, as assumed — `-v "$PWD:/work"` works
+  exactly as it would against a non-nested daemon.
 
 - **One generic wrapper, not one script per command.** The Makefile and
   `tools/*.py` layer initial-design.md describes will eventually want to run
@@ -98,8 +104,6 @@ through a different mechanism (`docker run` locally vs. GitHub Actions'
 
 ## Open questions
 
-- Confirm the Docker-in-Docker mount-semantics assumption above with an
-  actual test, before building anything on top of it.
 - Where the generic wrapper lives and its exact interface (working
   directory handling, how it locates the pinned digest — read from
   `devcontainer.json`? a shared file both it and CI read from?).
