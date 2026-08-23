@@ -1,13 +1,13 @@
 # Toolchain image in the devcontainer
 
-Status: draft — actively being iterated on, unlike `design/initial-design.md`
+Status: draft — actively being iterated on, unlike `initial-design.md`
 Scope: how local development (the devcontainer) gets access to the pinned
 `openscad-build` toolchain image, now that making it the devcontainer's base
 image directly has been tried and reverted.
 
 ## Background
 
-`docs/design/initial-design.md` calls for the toolchain to be "pinned by
+`initial-design.md` calls for the toolchain to be "pinned by
 image digest, in every place that builds" — explicitly including the
 devcontainer, "so local and CI builds are the same claim rather than two
 similar ones."
@@ -143,7 +143,7 @@ Routing CI through the same shim sidesteps the problem entirely: future
 friends) exactly as steps written for `container:` would have. The digest
 then has exactly one home, rather than being duplicated — and therefore
 driftable — across `devcontainer.json` and three workflow files the way
-`docs/design/initial-design.md` originally assumed.
+`initial-design.md` originally assumed.
 
 **This is a deliberate divergence from `initial-design.md`'s CI section**,
 which says "All workflows run in the pinned image via `container:`."
