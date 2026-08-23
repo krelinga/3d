@@ -8,75 +8,110 @@ A collection of OpenSCAD (`.scad`) source files for 3D-printable parts. Mesh
 files (STL/3MF) are treated as build output, not source — they are not
 committed.
 
-## Current state vs. target design
+## Design docs — read the relevant one before building
 
-**The repo today is a small, flat collection**: `.scad` files live directly
-under `scad/<category>/`, and `generate.sh` renders each one by hand to STL
-with a hardcoded output path (`/nas/dev/3d/stl/...`) and no parameters,
-variants, or CI.
+`docs/design/` holds three docs. They document not just the target state but
+the rejected alternatives and the reasoning behind each decision, and several
+decisions were revised after being tested. **Re-read the relevant section
+rather than re-deriving the design from scratch**, and prefer the doc's
+conclusion over what seems obvious — in more than one case the obvious answer
+was tried first and failed.
 
-**`docs/design/initial-design.md` describes a target architecture that has not
-been built yet.** It specifies a `parts/` monorepo layout (one directory per
-part, `entry.yaml` + `source.scad` + optional `params.json`), a `lib/` for
-shared OpenSCAD modules (including a BOSL2 submodule), a generated Makefile,
-and three GitHub Actions workflows (PR build, main-branch drift detection,
-on-demand per-part release) built on a toolchain image pinned by digest.
-**None of `parts/`, `lib/`, `tools/`, the Makefile, or the workflows exist
-yet.** Before assuming any command, file, or convention described in the
-design doc is available, check whether it has actually been implemented —
-read the design doc in full for the target shape, but verify against the
-current tree before relying on it.
+| Doc | Covers | Status |
+|---|---|---|
+| `initial-design.md` | Repo structure, catalog, versioning, build, CI, releases | Target design; largely unbuilt |
+| `openscad-image.md` | How the pinned toolchain image is built and reached, locally and in CI | **Built and in use** |
+| `previews.md` | Live rotatable preview loop for iterating on a model | Prototype built and validated |
 
-When implementing pieces of this design, follow the doc closely: it documents
-not just the target state but the rejected alternatives and the reasoning
-behind each decision (e.g. why parts are named by leaf directory rather than
-full path, why 3MF is the single rendered format with STL derived from it,
-why geometry comparisons are tolerance-based rather than byte/hash-based, why
-drift detection runs after merge rather than blocking the PR). Re-read the
-relevant section rather than re-deriving the design from scratch.
+They cross-reference rather than duplicate: `initial-design.md` delegates
+toolchain-reachability questions to `openscad-image.md` and iteration-preview
+questions to `previews.md`. When updating one, check whether a claim in
+another has gone stale.
+
+## Current state
+
+**Built and working:**
+
+- **Toolchain image.** `.devcontainer/Dockerfile` (pinned
+  `FROM openscad/openscad:dev.2026-01-12`, plus `python3-trimesh`,
+  `python3-yaml`, `imagemagick`), published by `.github/workflows/image.yml`
+  to `ghcr.io/krelinga/3d/openscad-build`.
+- **`bin/` shim.** `bin/.toolchain-shim` runs a command inside the pinned
+  image via `docker run`, dispatched by `argv[0]`; `bin/openscad` is a symlink
+  to it. That script is the **only** operative declaration of the image digest
+  (`openscad-image.md` quotes it, but only as illustration).
+  `devcontainer.json`'s `postCreateCommand` symlinks the shims into
+  `/usr/local/bin`, so `openscad` is on `PATH` for every process in the
+  container.
+- **Preview prototype.** `viewer/server.mjs` + `viewer/index.html` — watches
+  `scad/**/*.scad`, re-renders through the shim, and pushes a reload over SSE
+  to a three.js viewer that preserves the camera across re-renders.
+
+**Not built yet** — `parts/`, `lib/`, `tools/`, the `Makefile`, the committed
+`preview/` PNGs, and the `pr.yml` / `main.yml` / `release.yml` workflows. The
+models still live flat under `scad/<category>/*.scad`, and `generate.sh` is a
+one-off hardcoded to a personal `/nas/dev/3d` path — not a general build tool
+and not worth extending.
+
+Before assuming any command, file, or convention from a design doc exists,
+check the tree.
 
 ## Commands
 
-Rendering a part to STL, current (manual) style, matching `generate.sh`:
+Run OpenSCAD through the shim, which executes it inside the pinned image:
 
 ```sh
-openscad -o <output>.stl scad/<category>/<part>.scad
+openscad --backend=manifold --hardwarnings -o out.3mf scad/bases/one_inch.scad
 ```
 
-`generate.sh` is a one-off script hardcoded to a personal `/nas/dev/3d`
-output path — it is not a general-purpose build tool and will not work
-unmodified for anyone else.
+Bare `openscad` works because of the `/usr/local/bin` symlink; `./bin/openscad`
+is equivalent and works regardless of `PATH`.
 
-There is no test suite, linter, or CI configured yet.
+Live preview while editing (then open the forwarded port 5173):
+
+```sh
+node viewer/server.mjs scad/bases/one_inch.scad     # --format stl|3mf, --port N
+```
+
+There is no test suite, linter, or CI beyond `image.yml` yet.
+
+### Gotchas that have already bitten
+
+- **Absolute paths outside the workspace don't resolve.** The shim bind-mounts
+  `$PWD` at `/work`, so arguments must be repo-relative.
+- **OpenSCAD infers export format from the file suffix** and hard-errors on an
+  unknown one (`-o foo.stl.tmp` → *"Invalid suffix tmp"*). Temp files need a
+  format-valid suffix, or an explicit `--export-format`.
+- **OpenSCAD streams its output** — a render produces many incremental writes,
+  so anything reading the output concurrently should read a path that was
+  atomically renamed into place.
+- **`--hardwarnings` is not optional** in the build: OpenSCAD otherwise exits 0
+  after warning about non-manifold output.
 
 ## Environment
 
-The devcontainer (`.devcontainer/devcontainer.json`) provides Ubuntu Noble
-with `openscad` (installed via `.devcontainer/setup.sh`), Node.js LTS,
-Claude Code, and Docker-in-Docker. The `Antyos.openscad` VS Code extension is
-configured for `.scad` editing.
+Ubuntu Noble devcontainer with Node LTS, Claude Code, and Docker-in-Docker.
+OpenSCAD is **not** installed natively — it is reached only through the shim,
+which runs the pinned image via docker-in-docker.
 
-Note: the devcontainer setup does **not** currently match the design doc's
-"pinned dev-snapshot image digest" requirement — it installs `openscad` from
-`apt`, which is the stable 2021.01 release, not the dev snapshot the design
-doc says every feature it relies on requires (`--backend=manifold`,
-`--hardwarnings`, `--check-parameter-ranges`, headless EGL PNG export). If
-implementing the design's build/CI pipeline, the toolchain image work
-(`image.yml`, `.devcontainer/Dockerfile`, digest pinning) needs to happen
-first.
+The devcontainer deliberately has **no OpenSCAD-related VS Code extension**.
+`Antyos.openscad` was removed: its preview launches a native GUI needing an X
+display the container doesn't have, and its export passes absolute paths the
+shim can't resolve. `previews.md` records four 3D-viewer extensions that were
+evaluated and why none worked; don't re-add one without reading that.
 
-## Key design principles (from `docs/design/initial-design.md`)
+## Key design principles
 
-These matter for any future work extending this repo, not just literal
-implementation of the design doc:
+These matter for any work extending this repo, not just literal implementation
+of the design docs:
 
-- **Directory listing as catalog.** Whatever organizes parts should avoid
-  declaring a part's identity in more than one place (e.g. don't add a
-  central manifest that duplicates directory names).
-- **Measure geometry, don't hash it.** OpenSCAD output is not
-  byte-reproducible run-to-run (upstream issue #4931) or across lib3mf
-  versions (#5800). Any comparison of build output must be tolerance-based
-  (bbox/volume/area) rather than checksum-based.
-- **Pin the toolchain by image digest, everywhere it's used**, not by a
-  version string — there's no current OpenSCAD stable release with the
-  needed features.
+- **Directory listing as catalog.** Avoid declaring a part's identity in more
+  than one place (e.g. don't add a central manifest duplicating directory
+  names).
+- **Measure geometry, don't hash it.** OpenSCAD output is not byte-reproducible
+  run-to-run (upstream #4931) or across lib3mf versions (#5800). Compare build
+  output with tolerances on bbox/volume/area, never checksums.
+- **Pin the toolchain by digest, declared once.** Not by version string —
+  there's no current OpenSCAD stable release with the needed features.
+- **Verify before designing on top.** Several decisions here were reversed by
+  actually testing them; the docs record both the failure and the correction.

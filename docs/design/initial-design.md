@@ -143,6 +143,7 @@ tools/
   drift.py                # compare metrics against a baseline release
   render_index.py         # regenerate the README index table
 bin/                      # reaches the pinned toolchain image; see openscad-image.md
+viewer/                   # live iteration preview server; see previews.md
 Makefile
 .devcontainer/
   devcontainer.json
@@ -650,6 +651,30 @@ whatever the snapshot ships, so a toolchain bump does not silently retessellate
 every curve.
 
 ## Previews
+
+**Two different things get called "preview" in this repo.** They answer
+different questions and have nearly opposite requirements, so keeping them
+apart matters:
+
+| | **Review previews** — this section | **Iteration previews** — [previews.md](previews.md) |
+|---|---|---|
+| Question | "should this change ship?" | "did my edit do what I meant?" |
+| Audience | a PR reviewer, later | the author, right now |
+| Form | committed fixed-camera PNG | live, rotatable 3D in a browser |
+| Lifetime | versioned in git, diffed on GitHub | disposable, never committed |
+| Camera | deliberately fixed, so a diff shows only what moved | freely orbited, and preserved across re-renders |
+
+The rest of this section specifies the first. The second has
+[its own design doc](previews.md), and exists for two reasons this design
+creates but does not solve: the devcontainer is headless, so no OpenSCAD GUI
+can reach the screen, and a fixed-camera still image cannot answer "is the
+back of this part right." Broadly, it works by watching sources, re-rendering
+through the same pinned toolchain, and pushing the result to a small local
+server whose viewer swaps geometry without disturbing the camera.
+
+The two are expected to share the watch loop and the render path eventually —
+only the output format and the committed/disposable question differ — but
+that merge is deferred rather than assumed.
 
 One committed PNG per variant, rendered by `make preview`, committed by you,
 with CI verifying freshness.
