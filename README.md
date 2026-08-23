@@ -39,7 +39,7 @@ nothing else installed. See `docs/design/openscad-image.md`.
 For a live, rotatable preview that re-renders as you save:
 
 ```sh
-node viewer/server.mjs parts/bases/one-inch/source.scad
+node viewer/server.mjs one-inch
 ```
 
 then open the forwarded port. See `docs/design/previews.md`.

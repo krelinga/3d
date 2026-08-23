@@ -11,7 +11,8 @@
 // No dependencies — node: builtins only, so there is nothing to install.
 
 import { createServer } from 'node:http';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import os from 'node:os';
 import { promisify } from 'node:util';
 import { watch, promises as fsp, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -31,30 +32,52 @@ const opt = (name, def) => {
 const positional = argv.filter((a, i) =>
   !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--')));
 
-const SOURCE = positional[0] ?? 'scad/bases/one_inch.scad';
+const PART = positional[0] ?? '';
 // 3mf is the default: it is the primary format in initial-design.md, three.js
 // parses it without special handling (verified), and it is far smaller on the
 // wire — 10KB vs 191KB for the same part, which matters on every reload.
 const FORMAT = opt('format', '3mf');
 const PORT   = Number(opt('port', 5173));
-const WATCH  = opt('watch', 'scad');
-
-if (!existsSync(SOURCE)) {
-  console.error(`source not found: ${SOURCE}`);
-  process.exit(1);
-}
 if (!['stl', '3mf'].includes(FORMAT)) {
   console.error(`--format must be stl or 3mf (got ${FORMAT})`);
   process.exit(1);
 }
 
-const CACHE = path.join(REPO, 'viewer', '.cache');
-const OUT   = path.join(CACHE, `model.${FORMAT}`);
-// Temp name keeps a format-valid suffix: OpenSCAD infers the exporter from the
-// extension and hard-errors on anything else (see docs/design/previews.md).
-const TMP   = path.join(CACHE, `.tmp-model.${FORMAT}`);
+// Ask the catalog what exists rather than globbing: a part's path cannot be
+// constructed from its name, since categories are not part of the name.
+function catalog() {
+  const out = execFileSync('./bin/python3', ['tools/catalog.py', '--json'],
+                           { cwd: REPO, encoding: 'utf8' });
+  return JSON.parse(out);
+}
 
-await fsp.mkdir(CACHE, { recursive: true });
+let PARTS;
+try {
+  PARTS = catalog();
+} catch (err) {
+  console.error('could not read the catalog (is the toolchain image available?)');
+  console.error(String(err.stderr || err.message));
+  process.exit(1);
+}
+
+const part = PARTS.find(p => p.name === PART);
+if (!part) {
+  console.error(PART ? `no part named '${PART}'` : 'no part given');
+  console.error(`\navailable parts:\n  ${PARTS.map(p => p.name).join('\n  ')}`);
+  console.error(`\nusage: node viewer/server.mjs <part-name> [--format stl|3mf]`);
+  process.exit(1);
+}
+
+// The preview serves the same artifact `make` builds, out of the same tree --
+// so previewing and building are one code path, not two that can disagree.
+const variant = part.variants[0];
+const stem = `${part.name}-v${part.version}` +
+             (variant.param_set !== null ? `-${variant.name}` : '');
+const OUT = path.join(REPO, 'out', part.name, `${stem}.${FORMAT}`);
+
+// Watch sources, not output. entry.yaml and params.json are included because
+// `openscad -d` does not record either, so make cannot infer them.
+const WATCH_DIRS = ['parts', 'lib'].filter(d => existsSync(path.join(REPO, d)));
 
 // ------------------------------------------------------------------ SSE ----
 const clients = new Set();
@@ -74,25 +97,24 @@ async function render(reason) {
   push('rendering');
   const started = Date.now();
   try {
-    await execFileP('./bin/openscad', [
-      '--backend=manifold',
-      '--hardwarnings',
-      '-o', path.relative(REPO, TMP),
-      SOURCE,
-    ], { cwd: REPO });
-
-    // Atomic swap: a concurrent GET /model can never observe a partial mesh.
-    await fsp.rename(TMP, OUT);
+    // make decides what actually needs rebuilding, including the case where a
+    // lib/ edit moves several parts at once. It also handles the temp-then-
+    // atomic-rename discipline, so a concurrent GET /model can never observe a
+    // partial mesh.
+    await execFileP('make', ['-j' + (os.cpus().length || 2)], { cwd: REPO });
 
     lastError = null;
     const ms = Date.now() - started;
-    console.log(`  rendered ${SOURCE} -> ${path.relative(REPO, OUT)} (${ms}ms, ${reason})`);
+    console.log(`  built (${ms}ms, ${reason})`);
     push('rendered');
   } catch (err) {
-    lastError = (err.stderr || err.message || String(err)).trim();
-    console.error(`  render FAILED: ${lastError.split('\n')[0]}`);
-    push('failed', lastError);
-    await fsp.rm(TMP, { force: true });
+    lastError = [err.stdout, err.stderr, err.message]
+      .filter(Boolean).join('\n').trim();
+    console.error(`  BUILD FAILED (${reason})`);
+    console.error(lastError.split('\n').slice(-6).join('\n'));
+    // The last good model stays on the served path, so the preview degrades to
+    // stale rather than to blank.
+    push('failed', lastError.split('\n').slice(-6).join('\n'));
   } finally {
     rendering = false;
     if (queued) { queued = false; render('queued'); }
@@ -108,12 +130,13 @@ function onChange(file) {
   timer = setTimeout(() => render(`changed: ${file}`), 150);
 }
 
-if (existsSync(WATCH)) {
-  watch(WATCH, { recursive: true }, (_type, name) => {
-    if (name && name.endsWith('.scad')) onChange(name);
+for (const dir of WATCH_DIRS) {
+  watch(dir, { recursive: true }, (_type, name) => {
+    if (!name) return;
+    if (/\.(scad|ya?ml|json)$/.test(name)) onChange(`${dir}/${name}`);
   });
-  console.log(`watching ${WATCH}/**/*.scad`);
 }
+console.log(`watching ${WATCH_DIRS.join(', ')} for .scad/.yaml/.json changes`);
 
 // --------------------------------------------------------------- server ----
 const TYPES = { stl: 'model/stl', '3mf': 'model/3mf' };
@@ -137,7 +160,8 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ source: SOURCE, format: FORMAT, error: lastError }));
+    res.end(JSON.stringify({
+      source: `${part.name} v${part.version}`, format: FORMAT, error: lastError }));
     return;
   }
 
@@ -169,7 +193,8 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
-  console.log(`\n  source  ${SOURCE}`);
+  console.log(`\n  part    ${part.name} v${part.version}  (${part.path})`);
+  console.log(`  serving ${path.relative(REPO, OUT)}`);
   console.log(`  format  ${FORMAT}`);
   console.log(`  url     http://localhost:${PORT}\n`);
   await render('startup');

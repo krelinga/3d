@@ -43,9 +43,9 @@ another has gone stale.
   `devcontainer.json`'s `postCreateCommand` symlinks the shims into
   `/usr/local/bin`, so `openscad` is on `PATH` for every process in the
   container.
-- **Preview prototype.** `viewer/server.mjs` + `viewer/index.html` — watches
-  `scad/**/*.scad`, re-renders through the shim, and pushes a reload over SSE
-  to a three.js viewer that preserves the camera across re-renders.
+- **Preview server.** `viewer/server.mjs` + `viewer/index.html` — watches
+  `parts/` and `lib/`, runs `make`, and pushes a reload over SSE to a three.js
+  viewer that preserves the camera across re-renders.
 
 **Not built yet** — `parts/`, `lib/`, `tools/`, the `Makefile`, the committed
 `thumbnails/` PNGs, and the `pr.yml` / `main.yml` / `release.yml` workflows. The
@@ -70,7 +70,7 @@ is equivalent and works regardless of `PATH`.
 Live preview while editing (then open the forwarded port 5173):
 
 ```sh
-node viewer/server.mjs scad/bases/one_inch.scad     # --format stl|3mf, --port N
+node viewer/server.mjs one-inch      # --format stl|3mf, --port N
 ```
 
 There is no test suite, linter, or CI beyond `image.yml` yet.
