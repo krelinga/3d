@@ -1,7 +1,7 @@
 version: "1.0"
 status: active
 description: Large round miniature base with a wide recess for a weight or magnet (radius 40mm, i.e. 80mm across)
-camera: [0, 0, 0, 55, 0, 25, 250]
+camera: [0, 0, 0, 125, 0, 25, 250]
 print:
   layer_height: 0.2
   infill: 20

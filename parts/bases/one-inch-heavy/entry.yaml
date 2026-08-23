@@ -1,7 +1,7 @@
 version: "1.0"
 status: active
 description: One-inch round miniature base with a wide recess for a weight or magnet
-camera: [0, 0, 0, 55, 0, 25, 85]
+camera: [0, 0, 0, 125, 0, 25, 85]
 print:
   layer_height: 0.2
   infill: 20
