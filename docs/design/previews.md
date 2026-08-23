@@ -1,6 +1,6 @@
 # Previewing rendered output from the devcontainer
 
-Status: draft — extension route tested and rejected; own-server direction chosen, not yet built
+Status: prototype built and validated; remaining work is integration with the build system
 Scope: how someone editing `.scad` in the devcontainer sees the resulting
 geometry, interactively and from any angle, on a fast enough loop to iterate
 against.
@@ -191,11 +191,11 @@ the toolchain image is deliberately a stateless one-shot command runner, and
 a server inside it would need its port published to the devcontainer and
 then forwarded again.
 
-### Stopgap
+### Stopgap, no longer needed
 
-If something is wanted before the server exists: `stl-previewer` plus plain
-overwrite works today, at the cost of re-rotating after every save. Usable
-for "did that change what I expected," painful for sustained inspection.
+Before the server existed, `stl-previewer` plus plain overwrite was the only
+working option, at the cost of re-rotating after every save. The prototype
+supersedes it; recorded only so the option is not rediscovered as if new.
 
 ## Design requirements this imposes on the build
 
@@ -226,49 +226,58 @@ for "did that change what I expected," painful for sustained inspection.
 
 ## How much confidence this deserves
 
-**Proven by test, and load-bearing:**
+**Proven by test:**
 
 - inotify sees writes made by the **nested toolchain container** — the
   assumption the whole loop rests on, and the one most likely to have been
   silently false.
-- Render speed is a non-issue: 0.35 s end-to-end, ~0.20 s of it container
+- Render speed is a non-issue: ~0.22 s end-to-end, ~0.20 s of it container
   startup.
 - The truncated-write hazard is real and reproducible (~19 incremental
   writes per render), and atomic rename fixes it.
 - The extension route fails, specifically and for three different reasons —
   see the tables above. This is the finding that changed the design.
 
-**Assumed, not yet proven** — these belong to the unbuilt server:
+**Proven by the prototype** (`viewer/`), the items this section previously
+listed as assumed:
 
-- That a three.js scene can swap geometry without disturbing
-  `OrbitControls`, giving camera preservation by construction. This is
-  ordinary three.js usage rather than a novel trick, but it is the property
-  the whole direction is chosen for and should be the first thing the
-  prototype demonstrates.
-- That devcontainer port forwarding + Simple Browser is as frictionless as
-  expected. Port forwarding is first-class, so the risk is low.
-- That 3MF via `3MFLoader` is as straightforward as STL.
+- **Camera survives re-render**, in a real browser, for both STL and 3MF.
+  This is the property the whole direction was chosen for, and it was the
+  one thing that could have invalidated it.
+- **`3MFLoader` parses OpenSCAD's 3MF** without special handling.
+- Devcontainer port forwarding to the browser is as frictionless as
+  expected.
+- Debounce behaves: two rapid source edits produce exactly two render
+  cycles, not one per inotify event.
 
-**What would invalidate the direction:** if swapping geometry in place turns
-out to disturb the camera anyway, the own-server option loses its main
-advantage over `stl-previewer` and the calculus reopens. Cheap to check
-early, and worth checking before writing the file-serving half.
+**Emergent, and worth keeping:** because a failed render never reaches the
+served path, the atomic rename means a syntax error leaves the *last good
+model* on screen while the error is reported separately. The preview
+degrades to stale rather than to blank, which is the better failure.
+
+Nothing material about the preview design is now unverified. What remains
+is integration work, not risk.
 
 ## Open questions
 
-- Where iteration output lives. Rendering into a committed path would keep
-  the working tree permanently dirty while iterating; a gitignored scratch
-  location avoids that. Needs deciding once `out/` exists.
+- Where iteration output lives. The prototype uses a gitignored
+  `viewer/.cache/`, which is right for a standalone tool; once `out/` exists
+  the loop should probably render there instead so the preview and a manual
+  `make` share one tree rather than rendering twice.
 - Whether the watcher runs `make` for the whole tree or a scoped target.
   Full delegation is correct; a `lib/` edit rebuilding twelve parts
   mid-iteration may still be slower than wanted.
-- Whether the server serves one part at a time or an index of everything
-  built. The latter is more useful and not much harder, but invites scope
-  creep toward "a whole local gallery," which is not the goal.
-- Whether three.js is vendored into the repo or loaded from a CDN. Vendoring
-  works offline and avoids a network dependency in a tool meant to be fast;
-  it also adds a checked-in third-party asset, which nothing else in this
-  repo currently has (BOSL2 is planned as a submodule, not a vendored copy).
+- Whether the server serves one part at a time (as the prototype does, via a
+  CLI argument) or an index of everything built. The latter is more useful
+  and not much harder, but invites scope creep toward "a whole local
+  gallery," which is not the goal.
+- Whether three.js is vendored. The prototype pins `0.185.1` via importmap
+  from unpkg, which works but means no preview offline or if the CDN is
+  unreachable. Three options, in increasing weight: keep the pinned CDN;
+  fetch once into the gitignored cache and serve locally thereafter
+  (offline after first run, nothing checked in); or vendor properly. The
+  middle option looks best and was not built only because the prototype did
+  not need it.
 - Whether this ever merges with the deferred PR-review PNGs. They share the
   watch loop and the render path; only the output format and the
   committed/disposable question differ.
@@ -279,14 +288,8 @@ As with the rest of `docs/design/`, this rests partly on unbuilt work:
 `parts/`, `lib/`, `tools/`, and the `Makefile` do not exist yet, so "the
 watcher runs `make`" has nothing to call today.
 
-An interim version is cheap and worth building first regardless: watch
-`scad/**/*.scad`, render the changed file directly with `bin/openscad` to a
-temp path, `mv` into place, and signal the server. That exercises the whole
-loop against today's flat `scad/` tree, needs none of the unbuilt build
-system, and converts cleanly later — swapping "render the changed file"
-for "run `make`" is the only difference.
-
-Build order that front-loads the risk: **the viewer page first**, served
-from a static file, proving that swapping geometry leaves the camera alone.
-That is the one assumption the direction is chosen for. Only once it holds
-is the watcher and file-serving half worth writing.
+The prototype in `viewer/` therefore does the interim thing: it watches
+`scad/**/*.scad` and renders one nominated file directly through
+`bin/openscad`. That exercises the entire loop against today's flat tree,
+and converts cleanly later — swapping "render the nominated file" for "run
+`make`" is the only change required.

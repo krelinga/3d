@@ -32,7 +32,10 @@ const positional = argv.filter((a, i) =>
   !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--')));
 
 const SOURCE = positional[0] ?? 'scad/bases/one_inch.scad';
-const FORMAT = opt('format', 'stl');            // stl is the low-risk default
+// 3mf is the default: it is the primary format in initial-design.md, three.js
+// parses it without special handling (verified), and it is far smaller on the
+// wire — 10KB vs 191KB for the same part, which matters on every reload.
+const FORMAT = opt('format', '3mf');
 const PORT   = Number(opt('port', 5173));
 const WATCH  = opt('watch', 'scad');
 
