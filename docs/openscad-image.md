@@ -171,13 +171,20 @@ in the container regardless of how it was launched — and, being ahead of
 `/usr/bin` in Debian/Ubuntu's default ordering, would take precedence over
 any stray natively-installed `openscad` too.
 
-Mechanism: `postCreateCommand` (replacing `setup.sh`'s current
-apt-install-openscad job) loops over the symlinks checked into `bin/`
+Mechanism: `postCreateCommand` loops over the symlinks checked into `bin/`
 (skipping the real `.toolchain-shim` file, which is dot-prefixed and so
 excluded by a plain `bin/*` glob) and runs
 `sudo ln -sf "${containerWorkspaceFolder}/bin/<name>" "/usr/local/bin/<name>"`
 for each. A new shimmed command then only needs a new symlink added under
 `bin/` — no `devcontainer.json` edit.
+
+**`setup.sh` goes away entirely, rather than being repurposed for this.**
+Its only job was apt-installing stable OpenSCAD, which this whole
+direction is meant to make unnecessary — the devcontainer no longer needs
+OpenSCAD installed natively at all, only the shims. The symlink loop above
+is small enough to live inline as `postCreateCommand`'s value directly in
+`devcontainer.json`; keeping a separate script file around for it would be
+one more place to look for no real benefit.
 
 Verified from inside the actual devcontainer with a throwaway shim +
 symlink standing in for the real ones: `/usr/local/bin` does precede
@@ -232,11 +239,9 @@ environments; only the "how does `bin/` get onto `PATH`" step differs
 ## Open questions
 
 - Whether `Antyos.openscad` shells out to anything besides `openscad`
-  itself that would also need a shim.
-- Whether `setup.sh` is still the right place for whatever install step
-  remains (currently: apt-installing stable OpenSCAD, which this direction
-  is meant to make unnecessary — the devcontainer would no longer need
-  OpenSCAD installed natively at all, only the shim).
+  itself that would also need a shim. Not answerable until the
+  devcontainer is rebuilt with the first round of these changes applied —
+  left outstanding for now.
 - Update `initial-design.md`'s CI section to describe the shim-based
   approach instead of `container:`, once this is actually implemented.
 
