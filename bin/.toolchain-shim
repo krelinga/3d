@@ -15,5 +15,10 @@ IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e
 # tag to try it before pinning. Never set this in CI.
 [ -n "${TOOLCHAIN_IMAGE:-}" ] && IMAGE="$TOOLCHAIN_IMAGE"
 
+# OPENSCADPATH lets parts write `include <krelinga/defaults.scad>` instead of
+# counting ../ levels, which would otherwise break whenever a part is re-shelved
+# into a different category depth. Set here rather than baked into the image:
+# /work is this wrapper's mount layout, not a property of the toolchain.
 exec docker run --rm -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" \
+  -e OPENSCADPATH=/work/lib \
   "$IMAGE" "$(basename "$0")" "$@"

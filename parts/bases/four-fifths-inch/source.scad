@@ -1,5 +1,5 @@
-inch = 25.4;
-$fn = 100;
+include <krelinga/defaults.scad>
+include <krelinga/units.scad>
 
 difference() {
     cylinder(h = inch * 1/8, r = .8 * inch * 1/2);

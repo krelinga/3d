@@ -1,2 +1,7 @@
-stl/**
+# Build output. Meshes are derived, not source -- see docs/design/initial-design.md.
+out/
+build/
+thumbnails/**/.tmp-*
+
+# Live preview server scratch.
 viewer/.cache/
