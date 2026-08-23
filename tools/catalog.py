@@ -24,7 +24,11 @@ import yaml
 PARTS_DIR = Path("parts")
 
 DIR_NAME_RE = re.compile(r"^[a-z0-9-]+$")
-VERSION_RE = re.compile(r"^\d+\.\d+(\.\d+)?$")
+# Accepts 1, 1.0 or 1.2.3. Whatever is declared is normalised to three
+# components (see normalize_version): one canonical form reaches tags,
+# filenames and build records, so "1.0" and "1.0.0" can never name two
+# different releases of the same thing.
+VERSION_RE = re.compile(r"^\d+(\.\d+){0,2}$")
 VARIANT_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 
 TOP_LEVEL_KEYS = {
@@ -32,6 +36,19 @@ TOP_LEVEL_KEYS = {
 }
 REQUIRED_KEYS = {"version", "status", "description", "camera"}
 STATUSES = {"active", "deprecated"}
+
+
+def normalize_version(declared: str) -> str:
+    """Pad a declared version to major.minor.patch.
+
+    Padding happens once, here, rather than at each use site: the version is
+    identity-bearing (it is in the tag and in every artifact filename), so two
+    spellings of the same version must not be able to produce two different
+    tags.
+    """
+    parts = declared.split(".")
+    parts += ["0"] * (3 - len(parts))
+    return ".".join(parts)
 
 
 @dataclass
@@ -53,7 +70,7 @@ class Variant:
 class Part:
     name: str            # leaf directory name; never the path
     path: Path
-    version: str
+    version: str         # normalised to major.minor.patch; use this everywhere
     status: str
     description: str
     camera: list[float]
@@ -61,6 +78,7 @@ class Part:
     print_meta: dict = field(default_factory=dict)
     hardware: list[str] = field(default_factory=list)
     root: Path = PARTS_DIR
+    declared_version: str = ""   # exactly as written in entry.yaml
 
     @property
     def source(self) -> Path:
@@ -115,7 +133,8 @@ def _validate_entry(entry_path: Path, raw, errors: list[str]) -> dict | None:
                  f"version must be a quoted string, got {type(version).__name__} "
                  f"({version!r}) -- write version: \"{version}\"")
         elif not VERSION_RE.match(version):
-            _err(errors, entry_path, f"version {version!r} must match N.N or N.N.N")
+            _err(errors, entry_path,
+                 f"version {version!r} must match N, N.N or N.N.N")
 
     status = raw.get("status")
     if status is not None and status not in STATUSES:
@@ -218,7 +237,8 @@ def load(root: Path = PARTS_DIR) -> tuple[list[Part], list[str]]:
         parts.append(Part(
             name=part_dir.name,
             path=part_dir,
-            version=str(validated.get("version", "")),
+            version=normalize_version(str(validated.get("version", "0"))),
+            declared_version=str(validated.get("version", "")),
             status=validated.get("status", "active"),
             description=validated.get("description", ""),
             camera=list(validated.get("camera") or []),
@@ -307,6 +327,7 @@ def main() -> int:
     elif args.json:
         print(json.dumps([{
             "name": p.name, "path": str(p.path), "version": p.version,
+            "declared_version": p.declared_version,
             "status": p.status, "description": p.description,
             "category": p.category, "camera": p.camera,
             "variants": [{"name": v.name, "param_set": v.param_set} for v in p.variants],

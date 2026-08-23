@@ -340,7 +340,8 @@ altering any existing one, so it is a minor bump.
 - part directory names are unique across the whole of `parts/`
 - every directory name under `parts/`, category or part, matches `^[a-z0-9-]+$`
   (a part's is a tag prefix and a filename component)
-- `version` is a string matching `^\d+\.\d+(\.\d+)?$`
+- `version` is a string matching `^\d+(\.\d+){0,2}$`, and is normalized to
+  three components before use (see below)
 - `variants:` and `params.json` are present together or absent together
 - every `param_set` named actually exists in `params.json`
 - variant names are unique per part and match `^[a-z0-9_]+$` (they end up in
@@ -411,9 +412,16 @@ boundaries far less arbitrary than in software:
 - **Patch** — no functional geometry change. Label text, tolerance nudge within
   spec, source refactor.
 
-Patch is available but optional in practice. Using only `major.minor` and never
-bothering with the third field is fine — that stays a habit rather than a schema
-constraint, so it is cheap to change later.
+**Declared versions are normalized to three components.** `entry.yaml` may say
+`1`, `1.0` or `1.0.0`; all three mean the same thing and all three produce
+`v1.0.0` in the tag, in every artifact filename, in the build record and in the
+README index.
+
+Padding happens once, in `catalog.py`, rather than at each use site. The reason
+is that a version is identity-bearing — it is part of the tag and of every
+filename that leaves the repository — so two spellings of the same version must
+not be able to name two different releases of the same thing. Writing the short
+form stays perfectly fine; it simply is not a second form downstream.
 
 ### Tags — one release per part
 
