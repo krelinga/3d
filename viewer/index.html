@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>3d — live preview</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+               background: #15171a; color: #e6e6e6;
+               font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #canvas { position: fixed; inset: 0; display: block; }
+  #hud {
+    position: fixed; top: 12px; left: 12px; z-index: 10;
+    background: rgba(20, 22, 26, .86); border: 1px solid #2e3238;
+    border-radius: 6px; padding: 10px 12px; min-width: 260px;
+    backdrop-filter: blur(6px);
+  }
+  #hud h1 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em;
+            text-transform: uppercase; color: #8b939c; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; gap: 16px; }
+  .row + .row { margin-top: 3px; }
+  .k { color: #8b939c; }
+  .v { color: #e6e6e6; }
+  .proof { margin-top: 9px; padding-top: 9px; border-top: 1px solid #2e3238; }
+  .hint { margin-top: 9px; padding-top: 9px; border-top: 1px solid #2e3238;
+          color: #8b939c; max-width: 320px; }
+  #status.ok   { color: #6cc46c; }
+  #status.busy { color: #d8b24a; }
+  #status.err  { color: #e06c6c; }
+  #err { position: fixed; bottom: 12px; left: 12px; right: 12px; z-index: 10;
+         background: #3a1d1d; border: 1px solid #6b2b2b; color: #ffb4b4;
+         border-radius: 6px; padding: 10px 12px; white-space: pre-wrap;
+         display: none; max-height: 40vh; overflow: auto; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <h1>live preview</h1>
+  <div class="row"><span class="k">source</span><span class="v" id="src">…</span></div>
+  <div class="row"><span class="k">format</span><span class="v" id="fmt">…</span></div>
+  <div class="row"><span class="k">status</span><span class="v ok" id="status">connecting</span></div>
+  <div class="proof">
+    <div class="row"><span class="k">reloads</span><span class="v" id="reloads">0</span></div>
+    <div class="row"><span class="k">camera</span><span class="v" id="cam">—</span></div>
+    <div class="row"><span class="k">triangles</span><span class="v" id="tris">—</span></div>
+  </div>
+  <div class="hint">
+    Rotate to any angle, then edit the .scad and save.<br>
+    <b>reloads</b> should increment while <b>camera</b> stays identical.
+  </div>
+</div>
+
+<div id="err"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.185.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }  from 'three/addons/controls/OrbitControls.js';
+import { STLLoader }      from 'three/addons/loaders/STLLoader.js';
+import { ThreeMFLoader }  from 'three/addons/loaders/3MFLoader.js';
+
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------------------
+// Scene, camera, controls — created ONCE and never recreated. This is the
+// whole point of the design: a reload swaps geometry only, so the camera and
+// its OrbitControls state are untouched. See docs/design/previews.md.
+// ---------------------------------------------------------------------------
+const canvas   = $('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x15171a);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+camera.up.set(0, 0, 1);                  // Z-up, matching OpenSCAD
+camera.position.set(80, -80, 60);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+const key = new THREE.DirectionalLight(0xffffff, 2.0); key.position.set(1, -1, 1);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, 0.7); fill.position.set(-1, 1, 0.5);
+scene.add(fill);
+
+const grid = new THREE.GridHelper(200, 20, 0x3a3f46, 0x24282d);
+grid.rotation.x = Math.PI / 2;           // GridHelper is XZ by default; make it XY
+scene.add(grid);
+scene.add(new THREE.AxesHelper(25));
+
+const material = new THREE.MeshStandardMaterial({
+  color: 0xb9c4cf, metalness: 0.1, roughness: 0.6, flatShading: false,
+});
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+// ---------------------------------------------------------------------------
+// Model swapping
+// ---------------------------------------------------------------------------
+let currentObj = null;
+let firstLoad  = true;       // frame the model once; never reframe after that
+let reloads    = 0;
+
+function disposeObj(obj) {
+  obj.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material])
+      .forEach(m => { if (m !== material) m.dispose(); });
+  });
+}
+
+function countTriangles(obj) {
+  let n = 0;
+  obj.traverse(o => {
+    if (o.geometry?.attributes?.position) {
+      n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+    }
+  });
+  return Math.round(n);
+}
+
+function frame(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  if (box.isEmpty()) return;
+  const size   = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z) || 10;
+  const dist   = radius * 2.4;
+  controls.target.copy(center);
+  camera.position.set(center.x + dist * 0.7, center.y - dist * 0.7, center.z + dist * 0.6);
+  camera.near = radius / 100;
+  camera.far  = radius * 100;
+  camera.updateProjectionMatrix();
+  controls.update();
+  grid.position.z = box.min.z;
+}
+
+function setStatus(text, cls) { const s = $('status'); s.textContent = text; s.className = 'v ' + cls; }
+function showError(msg) { const e = $('err'); e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
+
+async function loadModel() {
+  setStatus('loading', 'busy');
+  try {
+    const info = await (await fetch('/info', { cache: 'no-store' })).json();
+    $('src').textContent = info.source;
+    $('fmt').textContent = info.format;
+    if (info.error) { showError(info.error); setStatus('render failed', 'err'); return; }
+
+    const res = await fetch('/model?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error(`GET /model → ${res.status}`);
+    const buf = await res.arrayBuffer();
+
+    let obj;
+    if (info.format === '3mf') {
+      obj = new ThreeMFLoader().parse(buf);
+    } else {
+      const geom = new STLLoader().parse(buf);
+      geom.computeVertexNormals();
+      obj = new THREE.Mesh(geom, material);
+    }
+
+    // --- the swap: remove old, add new, touch nothing else ---
+    if (currentObj) { scene.remove(currentObj); disposeObj(currentObj); }
+    currentObj = obj;
+    scene.add(obj);
+
+    if (firstLoad) { frame(obj); firstLoad = false; }   // once, and only once
+
+    $('tris').textContent = countTriangles(obj).toLocaleString();
+    reloads += 1;
+    $('reloads').textContent = reloads;
+    showError('');
+    setStatus('idle', 'ok');
+  } catch (e) {
+    showError(String(e && e.stack || e));
+    setStatus('error', 'err');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reload signal — pushed by the server, never watched from here
+// ---------------------------------------------------------------------------
+const es = new EventSource('/events');
+es.addEventListener('rendered', loadModel);
+es.addEventListener('rendering', () => setStatus('rendering', 'busy'));
+es.addEventListener('failed', ev => { showError(ev.data); setStatus('render failed', 'err'); });
+es.onerror = () => setStatus('disconnected', 'err');
+es.onopen  = () => setStatus('idle', 'ok');
+
+// ---------------------------------------------------------------------------
+let lastCam = '';
+function tick() {
+  controls.update();
+  renderer.render(scene, camera);
+  const p = camera.position;
+  const s = `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`;
+  if (s !== lastCam) { $('cam').textContent = s; lastCam = s; }
+  requestAnimationFrame(tick);
+}
+tick();
+loadModel();
+</script>
+</body>
+</html>
