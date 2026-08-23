@@ -364,7 +364,7 @@ Records what actually came out.
   "version": "2.3",
   "commit": "a1b2c3d...",
   "built_at": "2026-08-22T14:03:00Z",
-  "image": "ghcr.io/krelinga/openscad-build@sha256:9f2c...",
+  "image": "ghcr.io/krelinga/3d/openscad-build@sha256:9f2c...",
   "openscad_version": "OpenSCAD 2026.01.12 (git 4a8c1f2)",
   "artifacts": [
     {
@@ -583,7 +583,7 @@ PNG export. Every feature this design relies on exists only in dev snapshots.
 Therefore the pin is a **dev snapshot image digest**, not a version number:
 
 ```
-ghcr.io/krelinga/openscad-build@sha256:9f2c...
+ghcr.io/krelinga/3d/openscad-build@sha256:9f2c...
 ```
 
 built by `image.yml` `FROM openscad/openscad:dev.2026-01-12`, plus `python3`,

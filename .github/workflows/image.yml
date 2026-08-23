@@ -37,15 +37,15 @@ jobs:
           file: .devcontainer/Dockerfile
           push: true
           tags: |
-            ghcr.io/krelinga/openscad-build:latest
-            ghcr.io/krelinga/openscad-build:${{ github.sha }}
+            ghcr.io/krelinga/3d/openscad-build:latest
+            ghcr.io/krelinga/3d/openscad-build:${{ github.sha }}
 
       - name: Report pinned digest
         run: |
           {
             echo "### Toolchain image pushed"
             echo '```'
-            echo "ghcr.io/krelinga/openscad-build@${{ steps.build.outputs.digest }}"
+            echo "ghcr.io/krelinga/3d/openscad-build@${{ steps.build.outputs.digest }}"
             echo '```'
             echo "Update this digest in devcontainer.json and every workflow's \`container:\` key."
           } >> "$GITHUB_STEP_SUMMARY"
