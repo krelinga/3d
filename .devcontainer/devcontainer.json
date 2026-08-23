@@ -15,8 +15,11 @@
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 
-	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "./.devcontainer/setup.sh",
+	// Puts the shims under bin/ (see docs/openscad-image.md) onto PATH for
+	// every process in the container, not just VS Code's own remote server —
+	// /usr/local/bin is on the default PATH regardless of how a process was
+	// started, and precedes /usr/bin in Debian/Ubuntu's default ordering.
+	"postCreateCommand": "for f in \"${containerWorkspaceFolder}\"/bin/*; do [ -L \"$f\" ] && sudo ln -sf \"$f\" \"/usr/local/bin/$(basename \"$f\")\"; done",
 
 	// Configure tool-specific properties.
 	"customizations": {

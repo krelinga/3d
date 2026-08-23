@@ -1,0 +1,10 @@
+#!/bin/sh
+# Runs the command this script was invoked as (via argv[0], usually a
+# symlink like bin/openscad) inside the pinned toolchain image. See
+# docs/openscad-image.md for why this exists and how it's wired up.
+set -e
+
+IMAGE="ghcr.io/krelinga/3d/openscad-build@sha256:dff4de91db7808c0b48439af71e582e44e46daf3ec9ea477b86b95d2d5c8ef43"
+
+exec docker run --rm -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" \
+  "$IMAGE" "$(basename "$0")" "$@"
