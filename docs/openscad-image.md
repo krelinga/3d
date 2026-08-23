@@ -158,11 +158,79 @@ a part/variant matrix. `initial-design.md` should be updated to describe
 this instead of `container:` once it's implemented, rather than left
 describing an approach that's no longer the plan.
 
+### `PATH` inside the devcontainer — confirmed, via `/usr/local/bin` symlinks
+
+The devcontainer has three distinct consumers that need `openscad` on
+`PATH`, with different propagation guarantees under `devcontainer.json`'s
+own env mechanisms: the VS Code extension host (what `remoteEnv` actually
+scopes to), Claude Code (also installed as a devcontainer feature, running
+its own tool calls), and plain interactive/exec shells. Rather than reason
+through which hook covers which consumer, the shims get symlinked into
+`/usr/local/bin`, which is on the OS-level default `PATH` for any process
+in the container regardless of how it was launched — and, being ahead of
+`/usr/bin` in Debian/Ubuntu's default ordering, would take precedence over
+any stray natively-installed `openscad` too.
+
+Mechanism: `postCreateCommand` (replacing `setup.sh`'s current
+apt-install-openscad job) loops over the symlinks checked into `bin/`
+(skipping the real `.toolchain-shim` file, which is dot-prefixed and so
+excluded by a plain `bin/*` glob) and runs
+`sudo ln -sf "${containerWorkspaceFolder}/bin/<name>" "/usr/local/bin/<name>"`
+for each. A new shimmed command then only needs a new symlink added under
+`bin/` — no `devcontainer.json` edit.
+
+Verified from inside the actual devcontainer with a throwaway shim +
+symlink standing in for the real ones: `/usr/local/bin` does precede
+`/usr/bin` in this devcontainer's actual `PATH`; `sudo ln -sf` works with
+the `vscode` user's existing passwordless sudo; and a double-symlink chain
+(`/usr/local/bin/<name>` → `bin/<name>` → `bin/.toolchain-shim`) resolves
+correctly by bare name from an unrelated `cwd`, with `basename "$0"`
+inside the shim correctly reporting the invoked name rather than the
+underlying script's filename — the part the `argv[0]`-dispatch trick
+depends on. Ran as the normal `vscode` uid/gid throughout, not root.
+
+Not independently verified: `${containerWorkspaceFolder}` substitution
+itself, since that's resolved by the devcontainer CLI / VS Code's Dev
+Containers extension at `postCreateCommand` time, not reproducible from a
+plain shell without an actual container rebuild. The test above used the
+real absolute path (`/workspaces/3d`) as a stand-in for what that
+documented, standard devcontainer variable resolves to.
+
+### `PATH` in GitHub Actions — confirmed usable, and simpler than the devcontainer case
+
+The reason the devcontainer needs the `/usr/local/bin` workaround at all is
+that it has multiple distinct consumer processes with different `PATH`
+propagation guarantees. A GitHub Actions job doesn't have that problem —
+it's sequential `run:` steps sharing state through `$GITHUB_PATH`, which is
+the built-in mechanism for exactly this: one step does
+`echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"` and every later step in
+that job gets it prepended, no `sudo`, no symlinks, no rebuild-time
+variable substitution involved.
+
+Everything else about the design carries over to GitHub Actions
+unmodified:
+
+- GitHub-hosted `ubuntu-latest` runners are bare VMs, not containers, so
+  there's no nested-Docker-in-Docker complexity — `docker run` talks to an
+  already-running daemon directly.
+- The default `runner` user is already in the `docker` group (same as
+  `vscode` is here), so `docker run` needs no `sudo` there either.
+- `run:` steps default to `cwd = $GITHUB_WORKSPACE`, so
+  `-v "$PWD:/work" -w /work` behaves identically to local use.
+- `--user "$(id -u):$(id -g)"` needs no special-casing — same fix, same
+  reason, in both places.
+- `bin/openscad`'s symlink-ness and executable bit both survive
+  `actions/checkout` on Linux runners — git tracks both natively.
+- The image is public, so pulling it needs no `docker login` in CI (only
+  `image.yml`'s *push* step needs auth) — already confirmed by pulling it
+  anonymously earlier in this investigation.
+
+So the same `bin/.toolchain-shim` script is usable unmodified in both
+environments; only the "how does `bin/` get onto `PATH`" step differs
+(`$GITHUB_PATH` in CI vs. the `/usr/local/bin` symlink dance locally).
+
 ## Open questions
 
-- How the `openscad` shim gets onto `PATH` inside the devcontainer — a
-  `remoteEnv`/`containerEnv` `PATH` addition in `devcontainer.json`
-  pointing at `bin/`, most likely, but not yet written.
 - Whether `Antyos.openscad` shells out to anything besides `openscad`
   itself that would also need a shim.
 - Whether `setup.sh` is still the right place for whatever install step
