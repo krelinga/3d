@@ -11,5 +11,7 @@ include <krelinga/units.scad>
 // Bushing bore. Match your bushings' actual measured OD.
 jig_hole_dia = 13/32 * inch;
 
-// Face plate thickness, which is also the bore depth.
-jig_plate = 3/8 * inch;
+// Face plate thickness, which is also the bore depth. Written as the
+// expression rather than the result so the intent survives: 3/8" stock less
+// 4 mm.
+jig_plate = 3/8 * inch - 4;
