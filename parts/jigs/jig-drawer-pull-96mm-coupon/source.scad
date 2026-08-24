@@ -13,7 +13,13 @@ include <krelinga/drawer_pull_jig.scad>
 //
 // So this prints a row of bores stepped either side of nominal and lets the
 // bushing pick the winner. Whichever seats correctly tells you what to set
-// jig_hole_dia to in lib/krelinga/drawer_pull_jig.scad.
+// jig_bore_allowance to in lib/krelinga/drawer_pull_jig.scad.
+//
+// Note the centre bore tracks the CURRENT setting, not the raw bushing size.
+// Before calibration the two are the same. Afterwards, re-printing this
+// coupon is a confirmation -- the centre bore should now be the best fit --
+// rather than a fresh measurement. Picking an offset bore a second time means
+// ADJUSTING jig_bore_allowance by that step, not adding another one to it.
 //
 // Thickness and nominal diameter come from that same shared file, so the
 // coupon always tests the jig's real bore rather than a stale copy of it.
