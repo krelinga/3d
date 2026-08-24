@@ -8,4 +8,4 @@ print:
   supports: false
   orientation: face plate flat on the bed, lip pointing up
 hardware:
-  - 2x 3/8" OD press-fit steel drill bushing
+  - 2x steel drill bushing, 13/32" OD

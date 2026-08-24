@@ -31,7 +31,7 @@ lip = 3/8 * inch;
 // Centre-to-centre, set by the pull
 hole_spacing = 96;
 // Bushing outside diameter
-hole_dia = 3/8 * inch;
+hole_dia = 13/32 * inch;
 // Drawer's top edge down to the hole centres
 hole_drop = 2 * inch;
 
