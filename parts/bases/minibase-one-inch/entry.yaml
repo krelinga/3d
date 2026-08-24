@@ -1,6 +1,6 @@
 version: "1.0"
 status: active
-description: One-inch round miniature base with a shallow centre recess
+description: One-inch round miniature base, now with a description the README index does not know about
 camera: [0, 0, 0, 125, 0, 25, 85]
 print:
   layer_height: 0.2
