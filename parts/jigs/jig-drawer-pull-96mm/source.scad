@@ -29,6 +29,11 @@ lip_depth = 1/2 * inch;
 // Lip thickness
 lip = 3/8 * inch;
 
+/* [Centre notch] */
+// Sight slot through the lip. Mark a centreline on the drawer's top edge,
+// line the slot up with it, and both bores land symmetrically about it.
+notch_width = 1/8 * inch;
+
 /* [Bushing holes] */
 // Centre-to-centre, set by the pull
 hole_spacing = 96;
@@ -51,6 +56,12 @@ difference() {
         translate([0, -lip_depth, datum_z])
             cube([width, lip_depth, lip]);
     }
+    // Centre sight slot, cut through the lip only -- the face plate's top edge
+    // stays continuous. Runs the lip's full depth so the drawer's centreline
+    // is visible along the whole slot rather than through a single window.
+    translate([width / 2 - notch_width / 2, -lip_depth - 1, datum_z - 1])
+        cube([notch_width, lip_depth + 1, lip + 2]);
+
     // Bushing bores, straight through the face plate.
     for (side = [-1, 1])
         translate([width / 2 + side * hole_spacing / 2, -1, hole_z])

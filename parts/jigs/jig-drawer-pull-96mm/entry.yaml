@@ -1,6 +1,6 @@
 version: "1.0"
 status: active
-description: Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer's top edge
+description: Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer top edge with a centre sight slot
 camera: [76.2, 0, 38.1, 78, 0, 12, 380]
 print:
   layer_height: 0.2
