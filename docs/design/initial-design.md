@@ -488,10 +488,20 @@ python3 tools/metrics.py out/bracket/bracket-v2.3-m5_short.3mf
 which matters when every CI run rebuilds everything. It became non-experimental
 in 2024.09.28 but is **still not the default** — it must be passed explicitly.
 
-**`--hardwarnings` is not optional.** OpenSCAD emits warnings such as "object
-may not be a valid 2-manifold" and then exits 0 with a written file. Without
-`--hardwarnings`, CI reports success on output that will fail in a slicer.
-`--check-parameter-ranges=true` likewise.
+**`--hardwarnings` is worth passing, but it is not the guard against bad
+geometry.** It promotes warnings to failures, which is right, and
+`--check-parameter-ranges=true` likewise. But measured behaviour on the pinned
+toolchain is narrower than it sounds:
+
+| result | exit code | file written | what stops the build |
+|---|---|---|---|
+| empty top-level object | 1 | no | OpenSCAD itself |
+| non-manifold solid | 0 | yes | `tools/metrics.py` only |
+
+Two cubes meeting at a single edge build to `Genus: -1` and exit 0 **with or
+without** `--hardwarnings`. So the per-mesh assertions are not a second
+opinion on top of OpenSCAD — for non-manifold output they are the only
+opinion, which is why they fail the build rather than warn.
 
 ### The dependency file does not cover everything
 

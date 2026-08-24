@@ -83,14 +83,10 @@ def main() -> int:
     if args.model.suffix != ".3mf":
         raise SystemExit(f"metrics: expected a .3mf, got {args.model}")
     if not args.model.exists():
-        # The common cause is not a lost file: OpenSCAD prints "Current top
-        # level object is empty", writes nothing, and still exits 0 -- even
-        # under --hardwarnings. Failing here is what turns that into a build
-        # failure instead of a silently absent artifact.
-        raise SystemExit(
-            f"metrics: {args.model}: does not exist.\n"
-            f"  If the render reported 'Current top level object is empty', "
-            f"the model produced no geometry.")
+        # Not reachable from a normal build: an empty top-level object makes
+        # OpenSCAD exit 1, so make stops at the render and never gets here.
+        # Kept for direct invocation on a wrong path.
+        raise SystemExit(f"metrics: {args.model}: does not exist.")
 
     mesh = load_mesh(args.model)
     m = measure(mesh)
