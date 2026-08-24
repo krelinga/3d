@@ -83,8 +83,9 @@ distinctly different geometry; the failure is confined to *unavailable* names.
    observation about this digest, not a contract. A pin bump could change it
    and nothing would say so.
 
-2. **Use only families the image ships**, i.e. the table above. Anything else
-   silently becomes the default.
+2. **Use only families the image ships.** The table above lists them, but that
+   table is documentation, not the gate — rule 3 enforces this by measurement,
+   so a family the image lacks fails whether or not anyone updated a list.
 
 3. **CI must verify the font exists**, because nothing else will.
 
@@ -93,7 +94,7 @@ distinctly different geometry; the failure is confined to *unavailable* names.
 
 ## How the check works
 
-Rule 3 needs no font-enumeration API, which is fortunate given `fc-list`
+The check needs no font-enumeration API, which is fortunate given `fc-list`
 cannot see the bundled set: **render the named font and a deliberately bogus
 name, and compare the measured geometry. Identical means the named font is not
 installed and fell back.**
@@ -109,17 +110,61 @@ would be reported as missing. For distinct families that is not a realistic
 case, and the alternative — trusting an enumeration that demonstrably cannot
 see half the fonts — is worse.
 
-### Open questions
+### There is no allowlist to maintain
 
-- Where the check lives. It needs to scan `.scad` sources for `font =` values,
-  which is a different shape of work from `tools/catalog.py`'s `entry.yaml`
-  validation, and it needs to *render* something, which `make check` currently
-  never does.
-- Whether the allowlist is hard-coded or derived by probing the image.
-- Whether a part may use a font at all without declaring it in `entry.yaml`.
-  Declaring it would make the catalog the single place to look, consistent with
-  how the rest of the design treats declared intent — at the cost of a name
-  appearing in two places, which the catalog design otherwise avoids.
+The obvious design is a list of permitted families, hard-coded or probed. Both
+are unnecessary: because the check is *per name actually used*, naming a family
+the image does not ship fails on its own. An allowlist would be a second,
+staler statement of the same fact.
+
+The table above therefore documents what is available; it does not gate
+anything. A `--list` mode is still worth having so the answer to "what can I
+use?" does not require reading a design doc, but it is a convenience, and it is
+allowed to be incomplete in a way the gate is not — `fc-list` plus the bundled
+directory is good enough for a human, and not good enough for a check.
+
+### Font names live in the `.scad`, and only there
+
+*Rejected: declaring fonts in `entry.yaml`.* It looks like it fits the design's
+habit of making the catalog the single place to look, but it does not survive
+contact with the check. Verifying a declaration means confirming it matches
+what the source actually uses, which means parsing the `.scad` anyway — so the
+declaration adds a second place for the name to live, a second place for it to
+be wrong, and buys no verification that parsing did not already provide.
+
+The catalog declares *intent that cannot be derived from the source*: a
+version, a status, a camera. A font name is not that; it is already in the
+source, unambiguously.
+
+### Where it lives: `tools/check_fonts.py`, not `catalog.py`
+
+`catalog.py` validates `entry.yaml` structure. This scans `.scad` sources and
+renders geometry — different input, different mechanism, and a dependency on
+the toolchain that catalog validation deliberately does not have. Bolting it on
+would make `catalog.py` two tools sharing a name.
+
+Makefile wiring follows the pattern `catalog-check` and `index-check` already
+set: a narrow `fonts-check` target so a failing CI step is named for the
+problem it found, rolled into `make check` alongside the others, and therefore
+into `make pr`.
+
+One wrinkle worth naming: `make check` is otherwise "everything CI can verify
+without building", and this renders. It stays there anyway — `make check`
+already requires the toolchain image to run `bin/python3` at all, so the
+dependency is unchanged and only the runtime grows, by a couple of tiny renders
+per distinct font name. A separate never-run target would be worse than a
+slightly slower `make check`.
+
+### Still open
+
+- Whether the bogus-name control is rendered once per run or once per font.
+  Once per run is faster and is almost certainly equivalent, since the fallback
+  does not depend on what was asked for — but that is an assumption worth
+  measuring before relying on it.
+- What the check does about `text()` calls whose `font` is a variable or an
+  expression rather than a literal. Refusing to guess and reporting them as
+  unverifiable is probably right, but it needs deciding before the first part
+  does it.
 
 ## Consequence for parts
 
