@@ -45,6 +45,7 @@
   <div class="proof">
     <div class="row"><span class="k">reloads</span><span class="v" id="reloads">0</span></div>
     <div class="row"><span class="k">camera</span><span class="v" id="cam">—</span></div>
+    <div class="row"><span class="k">size mm</span><span class="v" id="size">—</span></div>
     <div class="row"><span class="k">triangles</span><span class="v" id="tris">—</span></div>
   </div>
   <div class="hint">
@@ -141,20 +142,38 @@ function countTriangles(obj) {
   return Math.round(n);
 }
 
-function frame(obj) {
+// OpenSCAD leaves a part wherever it was modelled. Some sit on the origin --
+// the minibases are built from centred cylinders -- but nothing requires it:
+// the drawer-pull jig spans x 0..152.4, so its centre is ~76 mm away from the
+// world origin that the grid, the axes helper and the orbit pivot all use.
+// Orbiting then swings the part through a wide arc instead of turning it in
+// place, which is awkward exactly as reported (issue #9).
+//
+// Recentring the object rather than chasing it with the camera target means
+// the pivot is (0,0,0) permanently: it can never go stale when the geometry
+// changes, and the grid and axes finally refer to the thing on screen.
+function recenter(obj) {
   const box = new THREE.Box3().setFromObject(obj);
-  if (box.isEmpty()) return;
+  if (box.isEmpty()) return box;
+  const c = box.getCenter(new THREE.Vector3());
+  obj.position.set(-c.x, -c.y, -c.z);
+  obj.updateMatrixWorld(true);
+  return new THREE.Box3().setFromObject(obj);
+}
+
+// Distance and clipping only. The orbit target is fixed at the origin by
+// recenter(), so this never needs to run again -- which is what keeps the
+// camera untouched across reloads.
+function frame(box) {
   const size   = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
   const radius = Math.max(size.x, size.y, size.z) || 10;
   const dist   = radius * 2.4;
-  controls.target.copy(center);
-  camera.position.set(center.x + dist * 0.7, center.y - dist * 0.7, center.z + dist * 0.6);
+  controls.target.set(0, 0, 0);
+  camera.position.set(dist * 0.7, -dist * 0.7, dist * 0.6);
   camera.near = radius / 100;
   camera.far  = radius * 100;
   camera.updateProjectionMatrix();
   controls.update();
-  grid.position.z = box.min.z;
 }
 
 function setStatus(text, cls) { const s = $('status'); s.textContent = text; s.className = 'v ' + cls; }
@@ -186,9 +205,18 @@ async function loadModel() {
     currentObj = obj;
     scene.add(obj);
 
-    if (firstLoad) { frame(obj); firstLoad = false; }   // once, and only once
+    // Every load, not just the first: a part that grows or moves as you edit
+    // it must stay centred, or the pivot drifts back off the model.
+    const box = recenter(obj);
+    const size = box.getSize(new THREE.Vector3());
+    // Grid sits under the part rather than at z=0, so it still reads as a bed.
+    grid.position.z = box.min.z;
+
+    if (firstLoad) { frame(box); firstLoad = false; }   // distance, once only
 
     $('tris').textContent = countTriangles(obj).toLocaleString();
+    $('size').textContent =
+      `${size.x.toFixed(1)} x ${size.y.toFixed(1)} x ${size.z.toFixed(1)}`;
     reloads += 1;
     $('reloads').textContent = reloads;
     showError('');
