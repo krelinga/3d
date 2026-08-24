@@ -96,10 +96,14 @@ jobs:
             fi
           done
           {
-            echo "## Metrics vs. last release"
+            echo "## Geometry vs. last release"
             echo ''
             echo '```'
-            ./bin/python3 tools/drift.py --baselines baselines \
+            # --review: same measurement, phrased for someone reviewing a change
+            # that has not merged. The post-merge check in main.yml keeps the
+            # sharper "your declared version is now dishonest" wording, because
+            # there it prompts a decision someone can actually act on.
+            ./bin/python3 tools/drift.py --baselines baselines --review \
               --image "$(grep -o 'ghcr.io/[^\"]*' bin/.toolchain-shim)" || true
             echo '```'
           } > metrics-comment.md
@@ -115,7 +119,7 @@ jobs:
           script: |
             const fs = require('fs');
             const body = fs.readFileSync('metrics-comment.md', 'utf8');
-            const marker = '## Metrics vs. last release';
+            const marker = '## Geometry vs. last release';
             const {owner, repo} = context.repo;
             const issue_number = context.issue.number;
             const existing = await github.rest.issues.listComments({owner, repo, issue_number});
