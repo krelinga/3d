@@ -1,6 +1,6 @@
 include <krelinga/units.scad>
 
-// Dimensions shared between jig-drawer-pull-96mm and jig-bushing-fit-coupon.
+// Dimensions shared between jig-drawer-pull-96mm and jig-drawer-pull-96mm-coupon.
 //
 // The coupon exists to predict how a bushing will seat in the jig. That
 // prediction is only worth anything if both bores are identical -- same
