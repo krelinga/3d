@@ -724,6 +724,13 @@ Because the tessellation is not stable run to run, the regenerated PNG will
 differ from the committed one by a scattering of edge pixels even when nothing
 changed. Byte comparison would be permanently red.
 
+CI must **force** the regeneration (`make -B thumbnails`). A fresh checkout
+gives every file the same mtime, so an ordinary `make thumbnails` concludes the
+committed PNGs are already current, rebuilds nothing, and the comparison then
+passes trivially — a check that silently tests nothing. This only shows up in
+CI: locally the source really is newer than the PNG, so make rebuilds and the
+check appears to work.
+
 CI compares with ImageMagick and fails only past a threshold:
 
 ```sh
