@@ -81,7 +81,8 @@ distinctly different geometry; the failure is confined to *unavailable* names.
 1. **Name the font explicitly. Never rely on the default.** The default is
    currently Liberation Sans — identical geometry confirms it — but that is an
    observation about this digest, not a contract. A pin bump could change it
-   and nothing would say so.
+   and nothing would say so. Enforceable: an omitted `font=` exports as
+   `font = ""`, so the check can see it.
 
 2. **Use only families the image ships.** The table above lists them, but that
    table is documentation, not the gate — rule 3 enforces this by measurement,
@@ -94,10 +95,56 @@ distinctly different geometry; the failure is confined to *unavailable* names.
 
 ## How the check works
 
-The check needs no font-enumeration API, which is fortunate given `fc-list`
-cannot see the bundled set: **render the named font and a deliberately bogus
-name, and compare the measured geometry. Identical means the named font is not
+The check is two stages: **ask OpenSCAD which fonts a part requests, then
+prove each one actually resolves.**
+
+### Stage 1 — extraction, via CSG export
+
+`openscad --export-format csg -o -` prints the evaluated CSG tree to stdout,
+and `text()` appears in it with every argument filled in:
+
+```
+$ openscad --export-format csg -o - part.scad
+linear_extrude(height = 2, ...) {
+    text(text = "A", size = 8, font = "DejaVu Serif", ...);
+}
+```
+
+**This is evaluated, not parsed.** All three of these report their resolved
+value, which no amount of regexing the source would get right:
+
+```scad
+font = str(family, " ", weight)      ->  "DejaVu Serif"
+font = pick(1)                       ->  "Liberation Sans"     // function + conditional
+module labelled(f) ...; labelled("DejaVu Sans Mono")
+                                     ->  "DejaVu Sans Mono"    // module parameter
+```
+
+Two properties fall out of this that source-parsing would not have given:
+
+- **Omitting `font=` is visible.** It exports as `font = ""`, so rule 1 —
+  never rely on the default — becomes something the check can enforce rather
+  than something the doc merely asks for.
+- **Only instantiated geometry is reported.** CSG is the evaluated tree, so a
+  `text()` in a branch that was not taken does not appear. That is the right
+  scope: the check should care about fonts a part actually uses.
+
+It is also effectively free. CSG export of the drawer-pull jig took 0.200 s
+against 0.203 s for a full 3MF render — both dominated by container startup,
+so extraction costs nothing measurable.
+
+Because a `params.json` parameter set could select a different font,
+extraction runs per part *per variant*, with the same `-p`/`-P` the build uses.
+
+### Stage 2 — availability, by rendering against a control
+
+Extraction reports what was *asked for*, not whether it exists: a bogus name
+exports as itself. So each distinct name is rendered and compared against a
+deliberately bogus control. **Identical geometry means the named font is not
 installed and fell back.**
+
+The control is rendered **once per run**, not once per name: the fallback does
+not depend on what was asked for, so one control serves every comparison.
 
 That is the same measure-don't-trust approach the rest of this design uses —
 `initial-design.md` compares geometry rather than hashing it, and
@@ -157,14 +204,14 @@ slightly slower `make check`.
 
 ### Still open
 
-- Whether the bogus-name control is rendered once per run or once per font.
-  Once per run is faster and is almost certainly equivalent, since the fallback
-  does not depend on what was asked for — but that is an assumption worth
-  measuring before relying on it.
-- What the check does about `text()` calls whose `font` is a variable or an
-  expression rather than a literal. Refusing to guess and reporting them as
-  unverifiable is probably right, but it needs deciding before the first part
-  does it.
+- What the check reports for `font = ""` — a rule 1 violation, or a warning.
+  Failing outright is the consistent choice, since the whole point is that the
+  default is not a contract, but it would make any existing part using bare
+  `text()` a build error the moment the check lands.
+- Whether stage 2's control string should match the part's real text. Glyph
+  coverage differs between families, so a name that resolves for `"A"` might
+  not for an unusual character. A fixed control string is simpler and almost
+  certainly sufficient.
 
 ## Consequence for parts
 
