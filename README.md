@@ -100,6 +100,6 @@ a `variants:` entry to `entry.yaml`.
 
 | Part | Version | Description | Release | Thumbnail |
 |---|---|---|---|---|
-| `jig-drawer-pull-96mm` | 1.0.0 | Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer top edge with a centre sight slot | [jig-drawer-pull-96mm/v1.0.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm%2Fv1.0.0) | ![jig-drawer-pull-96mm](thumbnails/jig-drawer-pull-96mm/jig-drawer-pull-96mm.png) |
-| `jig-drawer-pull-96mm-coupon` | 1.0.0 | Press-fit test coupon for jig-drawer-pull-96mm - five bores stepped either side of nominal, to find the diameter your printer actually produces | [jig-drawer-pull-96mm-coupon/v1.0.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm-coupon%2Fv1.0.0) | ![jig-drawer-pull-96mm-coupon](thumbnails/jig-drawer-pull-96mm-coupon/jig-drawer-pull-96mm-coupon.png) |
+| `jig-drawer-pull-96mm` | 1.1.0 | Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer top edge with a centre sight slot | [jig-drawer-pull-96mm/v1.1.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm%2Fv1.1.0) | ![jig-drawer-pull-96mm](thumbnails/jig-drawer-pull-96mm/jig-drawer-pull-96mm.png) |
+| `jig-drawer-pull-96mm-coupon` | 1.1.0 | Press-fit test coupon for jig-drawer-pull-96mm - five bores stepped either side of nominal, to find the diameter your printer actually produces | [jig-drawer-pull-96mm-coupon/v1.1.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm-coupon%2Fv1.1.0) | ![jig-drawer-pull-96mm-coupon](thumbnails/jig-drawer-pull-96mm-coupon/jig-drawer-pull-96mm-coupon.png) |
 <!-- END INDEX -->

@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.1"
 status: active
 description: Press-fit test coupon for jig-drawer-pull-96mm - five bores stepped either side of nominal, to find the diameter your printer actually produces
 camera: [41, 14, 4.76, 40, 0, 0, 190]
