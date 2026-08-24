@@ -85,8 +85,11 @@ There is no test suite, linter, or CI beyond `image.yml` yet.
 - **OpenSCAD streams its output** — a render produces many incremental writes,
   so anything reading the output concurrently should read a path that was
   atomically renamed into place.
-- **`--hardwarnings` is not optional** in the build: OpenSCAD otherwise exits 0
-  after warning about non-manifold output.
+- **OpenSCAD's exit code is not a sufficient gate.** An *empty* top-level
+  object exits 1 (so the build stops there), but a *non-manifold* result exits
+  0 with a file written, and `--hardwarnings` does not change that — measured,
+  not assumed. `tools/metrics.py`'s assertions are the only thing catching
+  non-manifold output, which makes them load-bearing rather than belt-and-braces.
 
 ## Environment
 
