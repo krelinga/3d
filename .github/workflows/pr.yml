@@ -43,41 +43,18 @@ jobs:
 
       - name: Verify committed thumbnails are fresh
         run: |
-          # -B is load-bearing, not belt-and-braces. A fresh checkout gives
-          # every file the same mtime, so plain `make thumbnails` decides the
-          # committed PNGs are already up to date, regenerates nothing, and the
-          # comparison below then trivially passes -- the check silently tests
-          # nothing. Forcing the rebuild is the only way to actually compare.
+          # -B is load-bearing: a fresh checkout gives every file the same
+          # mtime, so a plain `make thumbnails` decides the committed PNGs are
+          # already current, regenerates nothing, and this check silently
+          # passes. That bug shipped once already.
           make -B thumbnails
-          # Compare with a pixel tolerance: tessellation is not stable run to
-          # run, so a byte comparison would be permanently red. See
-          # docs/design/initial-design.md.
-          git diff --name-only -- thumbnails/ > changed.txt
-          if [ ! -s changed.txt ]; then
-            echo "Thumbnails are byte-identical."
+          if git diff --quiet -- thumbnails/; then
+            echo "Thumbnails are current."
             exit 0
           fi
-          # Scratch files must live inside the workspace: bin/ shims bind-mount
-          # $PWD, so anything under /tmp is invisible to them.
-          mkdir -p .thumbcheck
-          stale=""
-          limit=$(( 800 * 600 / 200 ))      # 0.5% of pixels
-          while read -r f; do
-            git show "HEAD:$f" > .thumbcheck/committed.png
-            # -metric AE reports the count of differing pixels on stderr.
-            diff_px=$(./bin/magick compare -metric AE -fuzz 2% \
-              .thumbcheck/committed.png "$f" null: 2>&1 | tr -d '\r' \
-              | grep -oE '^[0-9]+' || echo 999999)
-            echo "$f: ${diff_px} differing pixels (limit ${limit})"
-            if [ "${diff_px:-999999}" -gt "$limit" ]; then stale="$stale $f"; fi
-          done < changed.txt
-          rm -rf .thumbcheck changed.txt
-          if [ -n "$stale" ]; then
-            echo "::error::Thumbnails are stale; run 'make pr' and commit:$stale"
-            exit 1
-          fi
-          echo "Differences are within tolerance (tessellation noise)."
-          git checkout -- thumbnails/
+          echo "::error::Thumbnails are stale; run 'make pr' and commit:"
+          git diff --name-only -- thumbnails/ | sed 's/^/  /'
+          exit 1
 
       - name: Check the README index is current
         run: make index-check

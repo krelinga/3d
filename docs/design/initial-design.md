@@ -744,29 +744,51 @@ Headless rendering works without X on dev snapshots (built-in EGL). On a release
 image it would need `xvfb-run -a` and `docker --init` — another reason the pin
 is a dev snapshot.
 
-### The freshness check needs a pixel tolerance
+### The freshness check compares exactly
 
-Because the tessellation is not stable run to run, the regenerated PNG will
-differ from the committed one by a scattering of edge pixels even when nothing
-changed. Byte comparison would be permanently red.
+CI regenerates the thumbnails and fails if any differ from what is committed.
+No tolerance, no ImageMagick, no threshold:
+
+```sh
+make -B thumbnails
+git diff --quiet -- thumbnails/ || fail
+```
 
 CI must **force** the regeneration (`make -B thumbnails`). A fresh checkout
 gives every file the same mtime, so an ordinary `make thumbnails` concludes the
 committed PNGs are already current, rebuilds nothing, and the comparison then
-passes trivially — a check that silently tests nothing. This only shows up in
-CI: locally the source really is newer than the PNG, so make rebuilds and the
-check appears to work.
+passes trivially — a check that silently tests nothing. That bug shipped once,
+and only surfaced because a test was written to make the gate fail: locally the
+source really is newer than the PNG, so make rebuilds and the check appears to
+work.
 
-CI compares with ImageMagick and fails only past a threshold:
+#### Why not a pixel tolerance
 
-```sh
-compare -metric AE -fuzz 2% thumbnails/bracket/m5_short.png /tmp/regen.png null:
-# fail if AE > 0.5% of total pixels
-```
+An earlier version of this design specified an ImageMagick comparison failing
+past 0.5% of pixels, reasoning that unstable tessellation would otherwise make
+byte comparison permanently red. Measurement says otherwise, and splits the
+question in two:
 
-*Alternative if that proves flaky:* drop the pixel check and instead fail when
-the metrics diff says geometry changed but no file under `thumbnails/` was touched
-in the PR. Cruder, but it has no floating-point behaviour at all.
+- **Meshes are non-deterministic, as feared.** Two clean builds of the same
+  sources produce `.3mf` files with different checksums, consistent with
+  upstream [#4931](https://github.com/openscad/openscad/issues/4931).
+- **Rendered PNGs are not.** Fifteen consecutive regenerations across all
+  parts produced byte-identical images every time. Rasterizing at 800×600
+  does not surface vertex-level variation.
+
+So the tolerance was guarding a path the instability does not reach, and it
+was not free: it silently accepted real changes. A 0.62% volume change —
+comfortably past drift's 1e-4 threshold — moved only 542 pixels, well under
+the 2400-pixel limit. The committed thumbnail would have gone quietly stale
+while drift correctly reported the geometry had moved, and repeated small
+changes would accumulate.
+
+The failure modes are asymmetric, which settles it. Exact comparison fails
+loudly and self-resolvingly: the instruction is "commit the regenerated file",
+which is what a developer would do anyway. A tolerance fails silently and
+permanently. If PNG rendering ever does become unstable, the fix is a *small*
+tolerance calibrated to observed noise — not a large one chosen defensively
+against a hypothetical.
 
 ## CI
 

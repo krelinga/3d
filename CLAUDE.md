@@ -93,6 +93,10 @@ There is no test suite, linter, or CI beyond `image.yml` yet.
 - **OpenSCAD streams its output** — a render produces many incremental writes,
   so anything reading the output concurrently should read a path that was
   atomically renamed into place.
+- **`imagemagick` / `bin/magick` are no longer used by CI.** The thumbnail
+  check compares exactly rather than with a pixel tolerance. Both are kept for
+  ad-hoc investigation; dropping imagemagick from the image would cost a pin
+  bump, so it is a candidate for the next one rather than worth doing alone.
 - **OpenSCAD's exit code is not a sufficient gate.** An *empty* top-level
   object exits 1 (so the build stops there), but a *non-manifold* result exits
   0 with a file written, and `--hardwarnings` does not change that — measured,
