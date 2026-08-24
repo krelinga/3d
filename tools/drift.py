@@ -85,6 +85,9 @@ def main() -> int:
                     help="current toolchain digest; if it differs from a baseline's, "
                          "that part is reported as a rebaseline rather than drift")
     ap.add_argument("--json", action="store_true", help="emit JSON instead of prose")
+    ap.add_argument("--review", action="store_true",
+                    help="phrase the report for a PR reviewer rather than for the "
+                         "post-merge drift check (see the note below)")
     args = ap.parse_args()
 
     parts = load_or_die()
@@ -153,19 +156,42 @@ def main() -> int:
         }, indent=2))
         return 0
 
+    # The measurement is identical either way; only the framing differs, and the
+    # difference matters. On a PR the change has not merged, and
+    # initial-design.md is explicit that a version bump is a *release* decision
+    # rather than a merge decision -- "requiring version bumps in that PR would
+    # be wrong as often as it was right". Telling a reviewer their version is
+    # dishonest therefore prompts exactly the action the design rejects. After
+    # merge the same fact does prompt a real decision, so it keeps the sharper
+    # wording.
     if toolchain_moved:
-        print(f"TOOLCHAIN MOVED to {args.image}")
-        print(f"  {len(toolchain_moved)} part(s) show geometry change; review and "
-              f"re-tag as needed. This is one rebaseline, not {len(toolchain_moved)} "
-              f"separate drifts.\n")
+        if args.review:
+            print(f"Toolchain differs from the baseline builds "
+                  f"({len(toolchain_moved)} part(s) affected); differences below "
+                  f"may be from the toolchain rather than from this change.\n")
+        else:
+            print(f"TOOLCHAIN MOVED to {args.image}")
+            print(f"  {len(toolchain_moved)} part(s) show geometry change; review and "
+                  f"re-tag as needed. This is one rebaseline, not "
+                  f"{len(toolchain_moved)} separate drifts.\n")
     if real_drift:
-        print("DRIFT -- output changed but the declared version did not:\n")
+        if args.review:
+            print("Geometry changed since the last release:\n")
+        else:
+            print("DRIFT -- output changed but the declared version did not:\n")
         for d in real_drift:
-            print(f"  {d['part']} (still v{d['declared_version']}, "
-                  f"released v{d['released_version']})")
+            if args.review:
+                print(f"  {d['part']} (released v{d['released_version']})")
+            else:
+                print(f"  {d['part']} (still v{d['declared_version']}, "
+                      f"released v{d['released_version']})")
             for r in d["reasons"]:
                 print(f"    - {r}")
         print()
+        if args.review:
+            print("This is information, not a problem to fix here. Whether it is "
+                  "worth a release\nis decided later; version bumps are release "
+                  "decisions, not merge decisions.\n")
     for label, names in (("unreleased, no baseline", unreleased),
                          ("baseline incomparable", incomparable)):
         if names:
@@ -173,7 +199,8 @@ def main() -> int:
     if unchanged:
         print(f"unchanged: {len(unchanged)} part(s)")
     if not real_drift and not toolchain_moved:
-        print("\nNo drift.")
+        print("\nNo geometry change since the last release."
+              if args.review else "\nNo drift.")
     return 0
 
 
