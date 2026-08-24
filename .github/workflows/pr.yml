@@ -39,11 +39,15 @@ jobs:
 
       - name: Verify committed thumbnails are fresh
         run: |
-          # Regenerate and compare against what is committed. The comparison
-          # needs a pixel tolerance: tessellation is not stable run to run, so
-          # byte comparison would be permanently red. See
+          # -B is load-bearing, not belt-and-braces. A fresh checkout gives
+          # every file the same mtime, so plain `make thumbnails` decides the
+          # committed PNGs are already up to date, regenerates nothing, and the
+          # comparison below then trivially passes -- the check silently tests
+          # nothing. Forcing the rebuild is the only way to actually compare.
+          make -B thumbnails
+          # Compare with a pixel tolerance: tessellation is not stable run to
+          # run, so a byte comparison would be permanently red. See
           # docs/design/initial-design.md.
-          make thumbnails
           git diff --name-only -- thumbnails/ > changed.txt
           if [ ! -s changed.txt ]; then
             echo "Thumbnails are byte-identical."
