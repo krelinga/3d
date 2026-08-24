@@ -95,4 +95,11 @@ a `variants:` entry to `entry.yaml`.
 | `minibase-one-inch` | 1.0.0 | One-inch round miniature base with a shallow centre recess | [minibase-one-inch/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-one-inch%2Fv1.0.0) | ![minibase-one-inch](thumbnails/minibase-one-inch/minibase-one-inch.png) |
 | `minibase-one-inch-heavy` | 1.0.0 | One-inch round miniature base with a wide recess for a weight or magnet | [minibase-one-inch-heavy/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-one-inch-heavy%2Fv1.0.0) | ![minibase-one-inch-heavy](thumbnails/minibase-one-inch-heavy/minibase-one-inch-heavy.png) |
 | `minibase-two-inch-heavy` | 1.0.0 | Two-inch round miniature base with a wide recess for a weight or magnet | [minibase-two-inch-heavy/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-two-inch-heavy%2Fv1.0.0) | ![minibase-two-inch-heavy](thumbnails/minibase-two-inch-heavy/minibase-two-inch-heavy.png) |
+
+### jigs
+
+| Part | Version | Description | Release | Thumbnail |
+|---|---|---|---|---|
+| `jig-drawer-pull-96mm` | 1.0.0 | Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer top edge with a centre sight slot | [jig-drawer-pull-96mm/v1.0.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm%2Fv1.0.0) | ![jig-drawer-pull-96mm](thumbnails/jig-drawer-pull-96mm/jig-drawer-pull-96mm.png) |
+| `jig-drawer-pull-96mm-coupon` | 1.0.0 | Press-fit test coupon for jig-drawer-pull-96mm - five bores stepped either side of nominal, to find the diameter your printer actually produces | [jig-drawer-pull-96mm-coupon/v1.0.0](https://github.com/krelinga/3d/releases/tag/jig-drawer-pull-96mm-coupon%2Fv1.0.0) | ![jig-drawer-pull-96mm-coupon](thumbnails/jig-drawer-pull-96mm-coupon/jig-drawer-pull-96mm-coupon.png) |
 <!-- END INDEX -->
