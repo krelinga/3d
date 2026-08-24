@@ -56,11 +56,17 @@ difference() {
         translate([0, -lip_depth, datum_z])
             cube([width, lip_depth, lip]);
     }
-    // Centre sight slot, cut through the lip only -- the face plate's top edge
-    // stays continuous. Runs the lip's full depth so the drawer's centreline
-    // is visible along the whole slot rather than through a single window.
-    translate([width / 2 - notch_width / 2, -lip_depth - 1, datum_z - 1])
-        cube([notch_width, lip_depth + 1, lip + 2]);
+    // Centre sight slot: a channel across the jig's whole depth, through both
+    // the lip and the top edge of the face plate. Cutting the plate as well
+    // costs a little material at the corner the lip loads when you press down,
+    // but it opens a sight line from the front as well as from above, which
+    // is what makes the mark easy to line up rather than merely possible.
+    // Starts exactly at datum_z, so the slot's floor IS the plane the drawer's
+    // top edge registers against. Dropping below it would only be an artifact
+    // of a modelling margin -- harmless under the lip, but real material once
+    // the cut reaches the plate.
+    translate([width / 2 - notch_width / 2, -lip_depth - 1, datum_z])
+        cube([notch_width, lip_depth + plate + 2, lip + 1]);
 
     // Bushing bores, straight through the face plate.
     for (side = [-1, 1])
