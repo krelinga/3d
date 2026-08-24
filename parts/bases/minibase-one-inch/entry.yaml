@@ -1,4 +1,4 @@
-version: "1.0"
+version: 2.10
 status: active
 description: One-inch round miniature base with a shallow centre recess
 camera: [0, 0, 0, 125, 0, 25, 85]
