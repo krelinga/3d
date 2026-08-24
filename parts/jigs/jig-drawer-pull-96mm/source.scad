@@ -1,5 +1,6 @@
 include <krelinga/defaults.scad>
 include <krelinga/units.scad>
+include <krelinga/drawer_pull_jig.scad>
 
 // Drilling jig for a 96 mm centre-to-centre drawer pull.
 //
@@ -18,8 +19,9 @@ include <krelinga/units.scad>
 width = 6 * inch;
 // Top to bottom, including the lip
 height = 3 * inch;
-// Face plate thickness -- match your bushing length so they sit flush
-plate = 3/8 * inch;
+// Face plate thickness -- match your bushing length so they sit flush.
+// Shared with the fit coupon, which is only meaningful at the same thickness.
+plate = jig_plate;
 
 /* [Lip] */
 // How far the lip reaches back over the top of the drawer face
@@ -30,8 +32,9 @@ lip = 3/8 * inch;
 /* [Bushing holes] */
 // Centre-to-centre, set by the pull
 hole_spacing = 96;
-// Bushing outside diameter
-hole_dia = 13/32 * inch;
+// Bushing outside diameter. Shared with the fit coupon so a change to one
+// cannot leave the other testing the wrong size.
+hole_dia = jig_hole_dia;
 // Drawer's top edge down to the hole centres
 hole_drop = 2 * inch;
 

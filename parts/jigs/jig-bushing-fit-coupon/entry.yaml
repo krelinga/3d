@@ -1,0 +1,11 @@
+version: "1.0"
+status: active
+description: Press-fit test coupon for jig-drawer-pull-96mm - five bores stepped either side of nominal, to find the diameter your printer actually produces
+camera: [41, 14, 4.76, 40, 0, 0, 190]
+print:
+  layer_height: 0.2
+  infill: 40
+  supports: false
+  orientation: flat on the bed, bores vertical - the same way the jig prints
+hardware:
+  - 1x steel drill bushing, to test the fit
