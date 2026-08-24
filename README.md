@@ -82,6 +82,7 @@ a `variants:` entry to `entry.yaml`.
 - `docs/design/openscad-image.md` — how the pinned toolchain image is built
   and reached
 - `docs/design/previews.md` — the live preview loop
+- `docs/design/fonts.md` — using `text()` safely
 
 ## Parts
 

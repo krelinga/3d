@@ -22,11 +22,12 @@ was tried first and failed.
 | `initial-design.md` | Repo structure, catalog, versioning, build, CI, releases | Target design; largely unbuilt |
 | `openscad-image.md` | How the pinned toolchain image is built and reached, locally and in CI | **Built and in use** |
 | `previews.md` | Live rotatable preview loop for iterating on a model | Prototype built and validated |
+| `fonts.md` | Using `text()` safely: what is pinned, and the silent-fallback hazard | Specified, check not implemented |
 
 They cross-reference rather than duplicate: `initial-design.md` delegates
-toolchain-reachability questions to `openscad-image.md` and iteration-preview
-questions to `previews.md`. When updating one, check whether a claim in
-another has gone stale.
+toolchain-reachability questions to `openscad-image.md`, iteration-preview
+questions to `previews.md`, and `text()` questions to `fonts.md`. When
+updating one, check whether a claim in another has gone stale.
 
 ## Current state
 
