@@ -8,8 +8,20 @@ include <krelinga/units.scad>
 // the press fit has to overcome. Declaring them once means the coupon cannot
 // quietly stop representing the jig.
 
-// Bushing bore. Match your bushings' actual measured OD.
-jig_hole_dia = 13/32 * inch;
+// The bushings' outside diameter, as supplied. A property of the hardware.
+jig_bushing_od = 13/32 * inch;
+
+// How much larger the modelled bore has to be for the PRINTED hole to come
+// out at the bushing's size. A property of the printer and filament, not of
+// the hardware, which is why it is separate: change the bushings and this
+// still applies; change printer or material and it needs re-measuring.
+//
+// Measured with jig-drawer-pull-96mm-coupon: of the five graduated bores, the
+// one carrying four hash marks -- nominal +0.15 mm -- was the best fit.
+jig_bore_allowance = 0.15;
+
+// What the model actually cuts.
+jig_hole_dia = jig_bushing_od + jig_bore_allowance;
 
 // Face plate thickness, which is also the bore depth. A measured value, not
 // a derived one -- it comes from the bushings themselves, so it is written as
