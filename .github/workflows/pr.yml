@@ -76,7 +76,7 @@ jobs:
           git checkout -- thumbnails/
 
       - name: Check the README index is current
-        run: ./bin/python3 tools/render_index.py --check
+        run: make index-check
 
       # Information, never a gate. Whether a changed volume is acceptable is a
       # judgement for whoever approves the PR, who has this comment in front of

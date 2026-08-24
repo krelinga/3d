@@ -93,8 +93,8 @@ def main() -> int:
 
     if args.check:
         if updated != current:
-            print("render_index: README index block is out of date "
-                  "(run tools/render_index.py)", file=sys.stderr)
+            print("render_index: README index block is out of date -- "
+                  "run `make index` and commit the result", file=sys.stderr)
             return 1
         print("README index is up to date")
         return 0

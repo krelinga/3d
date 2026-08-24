@@ -29,7 +29,7 @@ PARTS := $(shell find parts -name entry.yaml 2>/dev/null)
 # the directories catches exactly the cases the file list cannot.
 PART_DIRS := $(shell find parts -type d 2>/dev/null)
 
-.PHONY: all check thumbnails clean help
+.PHONY: all check index index-check thumbnails clean help
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) $(PART_DIRS) tools/gen_rules.py tools/catalog.py
@@ -45,15 +45,31 @@ all: $(ARTIFACTS)
 
 thumbnails: $(THUMBNAILS)
 
+# Regenerates the README index block from the catalog. The generated-artifact
+# counterpart to `make thumbnails`: both produce something committed that CI
+# then verifies you did not forget.
+index:
+	$(PYTHON) tools/render_index.py
+
+# Same check `make check` runs, exposed separately so a CI step can fail with
+# a name that says what is wrong rather than "check".
+index-check:
+	$(PYTHON) tools/render_index.py --check
+
+# Everything CI can check without building. The index check is included
+# deliberately: without it `make check` passes on a stale index and the first
+# sign of trouble is a failed PR, which is the loop this target exists to close.
 check:
 	$(PYTHON) tools/catalog.py --validate
+	$(PYTHON) tools/render_index.py --check
 
 clean:
 	rm -rf $(OUT) $(BUILD)
 
 help:
 	@echo "make            build every part and variant (3mf + stl + metrics)"
-	@echo "make check      validate the catalog"
+	@echo "make check      validate the catalog and the README index"
+	@echo "make index      regenerate the README index block"
 	@echo "make thumbnails render the committed PNGs for PR review"
 	@echo "make clean      remove out/ and build/"
 	@echo ""

@@ -530,7 +530,7 @@ BUILD    := build
 # $(wildcard) has no ** — find is the only way to reach nested parts.
 PARTS    := $(shell find parts -name entry.yaml)
 
-.PHONY: all check thumbnails clean
+.PHONY: all check index thumbnails clean
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) tools/gen_rules.py
@@ -543,8 +543,17 @@ $(BUILD)/parts.mk: $(PARTS) tools/gen_rules.py
 all: $(ARTIFACTS)
 thumbnails: $(THUMBNAILS)
 
+# Everything CI can verify without building. The index check belongs here:
+# without it `make check` passes on a stale index and the first sign of
+# trouble is a failed PR.
 check:
 	python3 tools/catalog.py --validate
+	python3 tools/render_index.py --check
+
+# The generated-artifact counterpart to `make thumbnails` -- both produce
+# something committed that CI then verifies you did not forget.
+index:
+	python3 tools/render_index.py
 
 clean:
 	rm -rf $(OUT) $(BUILD)

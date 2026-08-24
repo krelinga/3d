@@ -26,7 +26,8 @@ build are the same claim rather than two similar ones. You need Docker; you do
 
 ```sh
 make             # build every part: 3mf + stl + metrics
-make check       # validate the catalog
+make check       # validate the catalog and the README index
+make index       # regenerate the README index block
 make thumbnails  # re-render the committed review images
 make -j$(nproc)  # parts are independent; OpenSCAD is single-threaded per run
 ```
