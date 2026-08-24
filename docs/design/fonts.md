@@ -133,29 +133,45 @@ It is also effectively free. CSG export of the drawer-pull jig took 0.200 s
 against 0.203 s for a full 3MF render — both dominated by container startup,
 so extraction costs nothing measurable.
 
-Because a `params.json` parameter set could select a different font,
-extraction runs per part *per variant*, with the same `-p`/`-P` the build uses.
+Because a `params.json` parameter set could select a different font — or a
+different string — extraction runs per part *per variant*, with the same
+`-p`/`-P` the build uses, and yields (text, font) pairs rather than bare font
+names. Stage 2 needs the text as much as the name.
 
-### Stage 2 — availability, by rendering against a control
+### Stage 2 — does this text render in this font?
 
-Extraction reports what was *asked for*, not whether it exists: a bogus name
-exports as itself. So each distinct name is rendered and compared against a
-deliberately bogus control. **Identical geometry means the named font is not
-installed and fell back.**
+Extraction reports what was *asked for*, not what happened: a bogus name
+exports as itself. So each name is rendered and compared against a
+deliberately bogus control — the same string, with a font name that certainly
+does not exist. **Identical geometry means the request fell back.**
 
-The control is rendered **once per run**, not once per name: the fallback does
-not depend on what was asked for, so one control serves every comparison.
+The control renders **once per distinct string**, not once per font name: the
+fallback does not depend on which font was requested.
 
-That is the same measure-don't-trust approach the rest of this design uses —
-`initial-design.md` compares geometry rather than hashing it, and
-`tools/metrics.py` asserts on the mesh rather than trusting an exit code. Here
-it tests what OpenSCAD actually did, rather than what a font database claims is
-available.
+**The control renders the part's own text, not a fixed sample**, and the
+distinction turns out to matter:
 
-Known limitation: a font that genuinely renders identically to the fallback
-would be reported as missing. For distinct families that is not a realistic
-case, and the alternative — trusting an enumeration that demonstrably cannot
-see half the fonts — is worse.
+```
+text("A", font = "DejaVu Serif")      10.2465 x 10.1248, 58.1001 mm3   <- differs
+text("A", font = "__no_such_font__")   9.2090 x  9.5548, 55.0511 mm3
+
+text("日", font = "Liberation Sans")   7.6289 x  9.5548, 33.2991 mm3   <- IDENTICAL
+text("日", font = "__no_such_font__")  7.6289 x  9.5548, 33.2991 mm3
+```
+
+Liberation Sans *is* installed, but it has no glyph for `日`, so it renders the
+same `.notdef` box the fallback does. A fixed `"A"` control would have called
+this font present and moved on, while the part quietly prints an empty box.
+
+That is why the check is framed as **"does this text render in this font?"**
+rather than "is this font installed?". The second question is easier and is
+not the one that matters: a part is broken by a glyph it cannot draw just as
+surely as by a font it cannot find, and the same measurement catches both.
+
+The failure message must therefore describe the symptom rather than guess the
+cause — *"`日` does not render in Liberation Sans; output is identical to the
+fallback"* covers a missing font and a missing glyph without claiming to know
+which.
 
 ### There is no allowlist to maintain
 
@@ -202,16 +218,12 @@ dependency is unchanged and only the runtime grows, by a couple of tiny renders
 per distinct font name. A separate never-run target would be worse than a
 slightly slower `make check`.
 
-### Still open
+### Settled
 
-- What the check reports for `font = ""` — a rule 1 violation, or a warning.
-  Failing outright is the consistent choice, since the whole point is that the
-  default is not a contract, but it would make any existing part using bare
-  `text()` a build error the moment the check lands.
-- Whether stage 2's control string should match the part's real text. Glyph
-  coverage differs between families, so a name that resolves for `"A"` might
-  not for an unusual character. A fixed control string is simpler and almost
-  certainly sufficient.
+- **`font = ""` fails.** Relying on the default is a rule 1 violation and is
+  treated as one. Nothing in the repo uses `text()` yet, so the cost of being
+  strict is zero today and only grows later — which is the argument for
+  deciding it now rather than after a part depends on the leniency.
 
 ## Consequence for parts
 
