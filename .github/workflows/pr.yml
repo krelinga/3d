@@ -28,7 +28,11 @@ jobs:
       # optimization, and building everything is what surfaces a lib/ change
       # that silently moves a dozen parts.
       - name: Validate the catalog
-        run: make check
+        # catalog-check, not check: `make check` now also verifies the README
+        # index, which would make a stale index fail under a step named
+        # "Validate the catalog". The narrow targets exist so the failing step
+        # names the actual problem.
+        run: make catalog-check
 
       - name: Build every part and variant
         run: make -j"$(nproc)"
@@ -69,7 +73,7 @@ jobs:
           done < changed.txt
           rm -rf .thumbcheck changed.txt
           if [ -n "$stale" ]; then
-            echo "::error::Thumbnails are stale; run 'make thumbnails' and commit:$stale"
+            echo "::error::Thumbnails are stale; run 'make pr' and commit:$stale"
             exit 1
           fi
           echo "Differences are within tolerance (tessellation noise)."

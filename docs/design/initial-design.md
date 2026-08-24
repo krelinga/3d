@@ -712,8 +712,9 @@ The two are expected to share the watch loop and the render path eventually —
 only the output format and the committed/disposable question differ — but
 that merge is deferred rather than assumed.
 
-One committed PNG per variant, rendered by `make thumbnails`, committed by
-you, with CI verifying freshness.
+One committed PNG per variant, rendered by `make thumbnails` (or `make pr`,
+which regenerates it along with everything else CI checks), committed by you,
+with CI verifying freshness.
 
 Rationale: with no STL revision diff on GitHub, the PNG diff is the only visual
 review available, and it needs to be in the PR — which rules out a bot that
