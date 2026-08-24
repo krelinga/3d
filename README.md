@@ -25,6 +25,17 @@ build are the same claim rather than two similar ones. You need Docker; you do
 **not** need OpenSCAD installed.
 
 ```sh
+make pr          # everything to do before opening a PR -- start here
+```
+
+`make pr` validates the catalog, builds every part, and regenerates the
+committed artifacts (thumbnails and the README index), then tells you which
+of them changed and need committing. It does what CI does, in CI's order, so
+a green `make pr` should mean a green PR.
+
+The pieces, if you need one on its own:
+
+```sh
 make             # build every part: 3mf + stl + metrics
 make check       # validate the catalog and the README index
 make index       # regenerate the README index block

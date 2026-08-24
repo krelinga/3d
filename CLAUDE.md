@@ -58,10 +58,18 @@ check the tree.
 
 ## Commands
 
-Run OpenSCAD through the shim, which executes it inside the pinned image:
+```sh
+make pr    # validate, build, regenerate thumbnails + README index; run before pushing
+```
+
+Individual targets exist (`make check`, `make index`, `make thumbnails`) but
+`make pr` runs them in CI's order and regenerates rather than only checking.
+
+Run OpenSCAD directly through the shim, which executes it inside the pinned
+image:
 
 ```sh
-openscad --backend=manifold --hardwarnings -o out.3mf scad/bases/one_inch.scad
+openscad --backend=manifold --hardwarnings -o out.3mf parts/bases/minibase-one-inch/source.scad
 ```
 
 Bare `openscad` works because of the `/usr/local/bin` symlink; `./bin/openscad`

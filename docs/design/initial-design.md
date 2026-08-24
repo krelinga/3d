@@ -530,7 +530,7 @@ BUILD    := build
 # $(wildcard) has no ** — find is the only way to reach nested parts.
 PARTS    := $(shell find parts -name entry.yaml)
 
-.PHONY: all check index thumbnails clean
+.PHONY: all pr check index thumbnails clean
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) tools/gen_rules.py
@@ -554,6 +554,12 @@ check:
 # something committed that CI then verifies you did not forget.
 index:
 	python3 tools/render_index.py
+
+# The one target anyone needs to remember: does what CI does, in CI's order,
+# regenerating the committed artifacts rather than only reporting them stale.
+# Forces the thumbnails, so it cannot disagree with CI about freshness.
+pr:
+	$(MAKE) catalog-check && $(MAKE) -j all && $(MAKE) -B thumbnails && $(MAKE) index
 
 clean:
 	rm -rf $(OUT) $(BUILD)

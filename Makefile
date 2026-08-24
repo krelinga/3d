@@ -7,6 +7,8 @@
 OPENSCAD ?= ./bin/openscad
 PYTHON   ?= ./bin/python3
 
+JOBS   ?= $(shell nproc 2>/dev/null || echo 4)
+
 OUT    := out
 BUILD  := build
 THUMBS := thumbnails
@@ -29,7 +31,7 @@ PARTS := $(shell find parts -name entry.yaml 2>/dev/null)
 # the directories catches exactly the cases the file list cannot.
 PART_DIRS := $(shell find parts -type d 2>/dev/null)
 
-.PHONY: all check index index-check thumbnails clean help
+.PHONY: all pr check catalog-check index index-check thumbnails clean help
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) $(PART_DIRS) tools/gen_rules.py tools/catalog.py
@@ -45,6 +47,30 @@ all: $(ARTIFACTS)
 
 thumbnails: $(THUMBNAILS)
 
+# Run this before opening a PR. Does everything CI does, in CI's order, and
+# *regenerates* the committed artifacts rather than only reporting them stale
+# -- there is rarely a reason to run the pieces separately, and forgetting one
+# is how a PR fails on something mechanical.
+#
+# Recursive rather than prerequisites because the order matters and would not
+# survive -j. Thumbnails are forced: mtimes decide nothing here, so this cannot
+# disagree with CI, which forces them for the same reason.
+pr:
+	@$(MAKE) --no-print-directory catalog-check
+	@$(MAKE) --no-print-directory -j$(JOBS) all
+	@$(MAKE) --no-print-directory -B thumbnails
+	@$(MAKE) --no-print-directory index
+	@echo ""
+	@if git diff --quiet -- README.md $(THUMBS)/ 2>/dev/null; then \
+	  echo "Ready to push: nothing regenerated, tree unchanged."; \
+	else \
+	  echo "Ready to push, once you commit these:"; \
+	  git diff --name-only -- README.md $(THUMBS)/ | sed 's/^/    /'; \
+	fi
+
+catalog-check:
+	$(PYTHON) tools/catalog.py --validate
+
 # Regenerates the README index block from the catalog. The generated-artifact
 # counterpart to `make thumbnails`: both produce something committed that CI
 # then verifies you did not forget.
@@ -59,14 +85,14 @@ index-check:
 # Everything CI can check without building. The index check is included
 # deliberately: without it `make check` passes on a stale index and the first
 # sign of trouble is a failed PR, which is the loop this target exists to close.
-check:
-	$(PYTHON) tools/catalog.py --validate
-	$(PYTHON) tools/render_index.py --check
+check: catalog-check index-check
 
 clean:
 	rm -rf $(OUT) $(BUILD)
 
 help:
+	@echo "make pr         everything to do before opening a PR (start here)"
+	@echo ""
 	@echo "make            build every part and variant (3mf + stl + metrics)"
 	@echo "make check      validate the catalog and the README index"
 	@echo "make index      regenerate the README index block"
