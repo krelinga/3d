@@ -1,0 +1,11 @@
+version: "1.0"
+status: active
+description: Drilling jig for a 96 mm centre-to-centre drawer pull, registering off the drawer's top edge
+camera: [76.2, 0, 38.1, 78, 0, 12, 380]
+print:
+  layer_height: 0.2
+  infill: 40
+  supports: false
+  orientation: face plate flat on the bed, lip pointing up
+hardware:
+  - 2x 3/8" OD press-fit steel drill bushing
