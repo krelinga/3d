@@ -34,6 +34,12 @@ jobs:
         # names the actual problem.
         run: make catalog-check
 
+      # Before the build, not after: a font that does not resolve makes the
+      # part wrong whether or not it builds, and failing here costs seconds
+      # instead of a full render of every part.
+      - name: Verify fonts resolve
+        run: make fonts-check
+
       - name: Build every part and variant
         run: make -j"$(nproc)"
 

@@ -1,6 +1,6 @@
 # Fonts in models
 
-Status: implemented in `tools/check_fonts.py`; wiring into `make` still to do
+Status: implemented — `tools/check_fonts.py`, wired into `make check` and CI
 Scope: using OpenSCAD's `text()` safely. What is pinned, what is deterministic,
 and the one failure mode that no existing gate catches.
 
