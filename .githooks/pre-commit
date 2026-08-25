@@ -1,0 +1,42 @@
+#!/bin/sh
+# Run `make check` before every commit: catalog validation, README index
+# freshness, and font resolution. Roughly half a second.
+#
+# Enabled by core.hooksPath, which devcontainer.json sets on create. Hooks
+# under .git/hooks are not version controlled, so a hook that lives there
+# exists only for whoever created it; this one is committed and applies to
+# every clone that runs the devcontainer setup.
+#
+# KNOWN LIMITATION: this validates the WORKING TREE, not the staged content.
+# With a partially staged tree the two differ, so an unstaged mistake can fail
+# a clean commit, and an unstaged fix can pass a broken one. The usual remedy
+# -- stash, check, unstash -- trades a visible annoyance for a way to lose
+# work, which is a bad trade for a convenience hook. `make pr` and CI both see
+# the real committed state, so this is a fast first filter rather than the
+# authority.
+#
+# Skip a single commit with `git commit --no-verify`.
+
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+# make check runs its tools inside the pinned toolchain image, so it needs a
+# docker daemon. Failing loudly beats skipping silently: a check that quietly
+# does nothing is the failure mode this repo keeps tripping over.
+if ! command -v docker >/dev/null 2>&1; then
+    echo "pre-commit: docker is unavailable, so 'make check' cannot run." >&2
+    echo "  Commit from inside the devcontainer, or use --no-verify." >&2
+    exit 1
+fi
+
+# Quiet when it passes -- a hook that prints on every commit teaches you to
+# stop reading it. Everything is shown when it fails.
+if output=$(make check 2>&1); then
+    exit 0
+fi
+
+echo "$output" >&2
+echo >&2
+echo "pre-commit: 'make check' failed; commit aborted." >&2
+echo "  Fix the above, or bypass this once with: git commit --no-verify" >&2
+exit 1
