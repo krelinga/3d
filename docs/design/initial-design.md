@@ -744,22 +744,45 @@ Headless rendering works without X on dev snapshots (built-in EGL). On a release
 image it would need `xvfb-run -a` and `docker --init` — another reason the pin
 is a dev snapshot.
 
-### The freshness check compares rendered pixels
+### The freshness check is still a byte diff. The tolerance is upstream of it
 
-CI regenerates the thumbnails and fails if any differs from what is committed
-by more than a measured number of pixels. Byte equality is the fast path and
-the ordinary case; the image comparison runs only on files that moved:
+CI regenerates the thumbnails and fails if the working tree is dirty:
 
 ```sh
 make -B thumbnails
-git diff --quiet -- thumbnails/ && pass          # ordinary case, no image work
-# else, for each changed file:
-magick compare -metric AE <committed> <regenerated> null:   # fail past 50 px
+git diff --quiet -- thumbnails/ || fail
 ```
 
-This replaced an exact byte comparison. The reasoning for that original choice
-is preserved below, because it is still what keeps the tolerance small — what
-changed is one measured fact, not the argument.
+The pixel tolerance is not here. It sits in the build, in
+`tools/place_thumbnail.sh`, which the generated rules invoke where a bare `mv`
+used to be:
+
+```make
+$(OPENSCAD) ... -o $(@D)/.tmp-<variant>.png <source>
+$(PLACE_THUMB) $(@D)/.tmp-<variant>.png $@      # replaces only a real change
+```
+
+The script keeps the committed PNG when a fresh render differs from it by no
+more than `THUMB_TOLERANCE_PX`, so a difference that is only rasterization
+noise never reaches the working tree — locally or on a runner.
+
+**Putting it there rather than in CI is what makes it one rule instead of
+two.** The obvious placement is the CI step, and that was tried first: it
+turns the gate green, but leaves `make pr` still overwriting the PNG on any
+machine whose CPU disagrees with whoever last committed. The developer commits
+the flip, the next machine flips it back, and the repository accumulates
+thumbnail churn that says nothing about any model. Moving the decision to the
+point where the file is *written* fixes both at once, and lets the CI check go
+back to the byte diff it always was: a clean tree already means every
+thumbnail is current.
+
+It also keeps the threshold declared once — `THUMB_TOLERANCE_PX` in the
+Makefile, exported to the script — rather than in a workflow and a build rule
+that must agree.
+
+This replaced an exact byte comparison at the `mv`. The reasoning for that
+original choice is preserved below, because it is still what keeps the
+tolerance small — what changed is one measured fact, not the argument.
 
 CI must **force** the regeneration (`make -B thumbnails`). A fresh checkout
 gives every file the same mtime, so an ordinary `make thumbnails` concludes the

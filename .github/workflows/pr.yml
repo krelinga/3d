@@ -49,14 +49,6 @@ jobs:
 
       - name: Verify committed thumbnails are fresh
         id: thumbnails
-        env:
-          # Calibrated to measured noise, not chosen defensively against a
-          # hypothetical -- which is the distinction initial-design.md draws in
-          # "Why not a pixel tolerance". Observed host disagreement is 1 pixel;
-          # the smallest real change on record moved 542. This sits between,
-          # two orders of magnitude clear of the noise and still an order below
-          # the change the old 2400-pixel tolerance would have waved through.
-          THUMB_TOLERANCE_PX: "50"
         run: |
           # -B is load-bearing: a fresh checkout gives every file the same
           # mtime, so a plain `make thumbnails` decides the committed PNGs are
@@ -64,52 +56,30 @@ jobs:
           # passes. That bug shipped once already.
           make -B thumbnails
 
-          # Byte-identical is the ordinary case and costs nothing to confirm,
-          # so the image comparison below runs only when something moved.
+          # A plain byte diff is the whole check. The pixel tolerance lives in
+          # tools/place_thumbnail.sh, which make invokes instead of `mv`, so a
+          # render differing only by cross-host rasterization noise never
+          # reaches the working tree at all. Declaring it there rather than
+          # here keeps it in one place and keeps local and CI agreeing by
+          # construction: a dirty tree means something really moved.
           if git diff --quiet -- thumbnails/; then
             echo "Thumbnails are current."
             exit 0
           fi
+          echo "::error::Thumbnails are stale; run 'make pr' and commit:"
+          git diff --name-only -- thumbnails/ | sed 's/^/  /'
+          exit 1
 
-          # Differing bytes is not the same as differing to the eye. The same
-          # mesh rendered on a different CPU can break a depth tie at a
-          # silhouette pixel: measured on fred-drawer-pens-front, exactly one
-          # pixel of 480000, where the dovetail tab's top face and the body's
-          # side face land at equal depth. Renders are deterministic per host
-          # and merely disagree across hosts, so compare pixels, not bytes.
-          rc=0
-          mkdir -p build/thumb-ref
-          for f in $(git diff --name-only -- thumbnails/); do
-            # The reference lives under build/ because bin/magick bind-mounts
-            # the repo at /work and cannot resolve a path outside it.
-            ref="build/thumb-ref/$(echo "$f" | tr / _)"
-            git show "HEAD:$f" > "$ref"
-            # compare writes the metric to stderr and exits non-zero whenever
-            # the images differ at all, which here is the expected case.
-            ae=$(./bin/magick compare -metric AE "$ref" "$f" null: 2>&1 >/dev/null || true)
-            ae=${ae%% *}
-            case "$ae" in
-              ''|*[!0-9]*)
-                # Differing dimensions make compare error rather than count,
-                # and that is a real change by definition.
-                echo "::error::$f: cannot compare, got '$ae' -- did the image size change?"
-                rc=1 ;;
-              *)
-                if [ "$ae" -le "$THUMB_TOLERANCE_PX" ]; then
-                  echo "  $f: $ae px differ, within tolerance $THUMB_TOLERANCE_PX"
-                else
-                  echo "::error::$f: $ae px differ, over tolerance $THUMB_TOLERANCE_PX; run 'make pr' and commit"
-                  rc=1
-                fi ;;
-            esac
-          done
-          exit $rc
-
-      # `make -B` above overwrote the committed PNGs in place, so on failure
-      # thumbnails/ holds what THIS host rendered. That is the one thing a
-      # local checkout cannot produce: a thumbnail that differs only on the
-      # runner's CPU is, by definition, not reproducible on the machine trying
-      # to debug it. Without this the only move is to guess, push, and wait.
+      # `make -B` above left thumbnails/ holding what THIS host rendered, and
+      # reaching here means the difference was past tolerance -- so these are
+      # the images that disagree, and looking at them is the fastest way to
+      # tell a real geometry change from something about the runner. Keeping
+      # them costs nothing; regenerating them costs a push and a wait.
+      #
+      # This is also the step that made the tolerance measurable in the first
+      # place: the one-pixel cross-host difference could not be reproduced on
+      # any machine trying to debug it, so the runner's own render was the only
+      # available evidence.
       #
       # Scoped to this step's own outcome rather than a bare `failure()`, which
       # would also fire when an earlier step failed -- and then upload the
