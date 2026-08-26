@@ -1,0 +1,9 @@
+version: "1.0"
+status: active
+description: Dovetail fit coupon for the drawer organizer - one tab and five sockets stepped either side of nominal, to find the clearance your printer actually produces
+camera: [78, -4, 3.2, 52, 0, 0, 250]
+print:
+  layer_height: 0.2
+  infill: 40
+  supports: false
+  orientation: flat on the bed, dovetails vertical - the same way the trays print

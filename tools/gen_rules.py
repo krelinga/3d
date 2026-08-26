@@ -95,7 +95,10 @@ def emit_thumbnail(part: Part, variant: Variant, out: list[str]) -> str:
     out.append(f"\t  --imgsize=$(THUMB_SIZE) --camera={camera} \\")
     out.append(f"\t  --colorscheme=$(THUMB_COLORSCHEME){flags} \\")
     out.append(f"\t  -o $(@D)/.tmp-{variant.name}.png {part.source}")
-    out.append(f"\tmv $(@D)/.tmp-{variant.name}.png $@")
+    # Not a bare mv: a render that differs from the committed PNG only by
+    # cross-host rasterization noise must not replace it. See
+    # tools/place_thumbnail.sh.
+    out.append(f"\t$(PLACE_THUMB) $(@D)/.tmp-{variant.name}.png $@")
     out.append("")
     return png
 

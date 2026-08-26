@@ -54,7 +54,11 @@ updating one, check whether a claim in another has gone stale.
   the last release), `check_fonts.py` (see below), `build_record.py` and
   `print_md.py` (release assets).
 - **Committed thumbnails.** `thumbnails/<part>/<part>.png`, rendered by
-  `make thumbnails` and compared exactly — not with a pixel tolerance — in CI.
+  `make thumbnails`. The rules call `tools/place_thumbnail.sh` rather than
+  `mv`: a fresh render replaces the committed PNG only if it differs by more
+  than `THUMB_TOLERANCE_PX` (50), because the same mesh rasterizes one pixel
+  differently on a different CPU. CI is then just `git diff --quiet --
+  thumbnails/`, since noise never reaches the working tree in the first place.
 - **Font check.** `tools/check_fonts.py` asks OpenSCAD for the evaluated CSG
   tree and measures each `(text, font)` pair against a deliberately
   unresolvable control name, catching the silent fallback that leaves a
@@ -124,10 +128,14 @@ geometry assertions in `tools/metrics.py` are the closest thing to a test.
 - **OpenSCAD streams its output** — a render produces many incremental writes,
   so anything reading the output concurrently should read a path that was
   atomically renamed into place.
-- **`imagemagick` / `bin/magick` are no longer used by CI.** The thumbnail
-  check compares exactly rather than with a pixel tolerance. Both are kept for
-  ad-hoc investigation; dropping imagemagick from the image would cost a pin
-  bump, so it is a candidate for the next one rather than worth doing alone.
+- **`imagemagick` / `bin/magick` are load-bearing again.** They were briefly
+  not: thumbnails were compared byte-for-byte, and dropping imagemagick was a
+  candidate for the next pin bump. Then a thumbnail turned out to differ
+  between the devcontainer and the GitHub runner by exactly one pixel — a
+  depth tie at a silhouette corner, broken differently by different CPUs — so
+  `tools/place_thumbnail.sh` now measures pixels on every build. Do not remove
+  imagemagick from the image. `initial-design.md`, "Why not a pixel tolerance",
+  has the measurements.
 - **OpenSCAD's exit code is not a sufficient gate.** An *empty* top-level
   object exits 1 (so the build stops there), but a *non-manifold* result exits
   0 with a file written, and `--hardwarnings` does not change that — measured,

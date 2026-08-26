@@ -21,6 +21,18 @@ OPENSCAD_FLAGS    ?= --backend=manifold --hardwarnings --check-parameter-ranges=
 THUMB_SIZE        ?= 800,600
 THUMB_COLORSCHEME ?= Tomorrow
 
+# How many pixels a re-render may differ from the committed PNG before it
+# counts as a real change. Not zero: the same mesh rasterizes one pixel
+# differently on a different CPU, so zero would make every machine rewrite the
+# other's thumbnails forever. Calibrated to that measured noise and kept far
+# below the smallest real geometry change -- docs/design/initial-design.md,
+# "Why not a pixel tolerance", has the numbers.
+THUMB_TOLERANCE_PX ?= 50
+export THUMB_TOLERANCE_PX
+
+# Decides whether a fresh render replaces the committed one.
+PLACE_THUMB := tools/place_thumbnail.sh
+
 # $(wildcard) has no ** -- find is the only way to reach nested parts.
 PARTS := $(shell find parts -name entry.yaml 2>/dev/null)
 

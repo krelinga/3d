@@ -48,12 +48,20 @@ jobs:
       # failed by this point.
 
       - name: Verify committed thumbnails are fresh
+        id: thumbnails
         run: |
           # -B is load-bearing: a fresh checkout gives every file the same
           # mtime, so a plain `make thumbnails` decides the committed PNGs are
           # already current, regenerates nothing, and this check silently
           # passes. That bug shipped once already.
           make -B thumbnails
+
+          # A plain byte diff is the whole check. The pixel tolerance lives in
+          # tools/place_thumbnail.sh, which make invokes instead of `mv`, so a
+          # render differing only by cross-host rasterization noise never
+          # reaches the working tree at all. Declaring it there rather than
+          # here keeps it in one place and keeps local and CI agreeing by
+          # construction: a dirty tree means something really moved.
           if git diff --quiet -- thumbnails/; then
             echo "Thumbnails are current."
             exit 0
@@ -61,6 +69,28 @@ jobs:
           echo "::error::Thumbnails are stale; run 'make pr' and commit:"
           git diff --name-only -- thumbnails/ | sed 's/^/  /'
           exit 1
+
+      # `make -B` above left thumbnails/ holding what THIS host rendered, and
+      # reaching here means the difference was past tolerance -- so these are
+      # the images that disagree, and looking at them is the fastest way to
+      # tell a real geometry change from something about the runner. Keeping
+      # them costs nothing; regenerating them costs a push and a wait.
+      #
+      # This is also the step that made the tolerance measurable in the first
+      # place: the one-pixel cross-host difference could not be reproduced on
+      # any machine trying to debug it, so the runner's own render was the only
+      # available evidence.
+      #
+      # Scoped to this step's own outcome rather than a bare `failure()`, which
+      # would also fire when an earlier step failed -- and then upload the
+      # untouched committed PNGs as though they were evidence.
+      - name: Upload the regenerated thumbnails
+        if: failure() && steps.thumbnails.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-thumbnails
+          path: thumbnails/
+          retention-days: 7
 
       - name: Check the README index is current
         run: make index-check

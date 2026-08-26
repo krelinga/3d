@@ -1,0 +1,9 @@
+version: "1.0"
+status: active
+description: Pen tray for the front-left of Fred's drawer organizer, four 1.5-inch cells, dovetailed to the tray behind it and the bin beside it
+camera: [76.2, 76.2, 25.4, 55, 0, 115, 430]
+print:
+  layer_height: 0.2
+  infill: 15
+  supports: false
+  orientation: platform flat on the bed, cells opening upward
