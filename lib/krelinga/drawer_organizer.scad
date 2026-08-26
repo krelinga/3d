@@ -55,11 +55,18 @@ dove_height = 4;
 // mallet is worse than one that needs a shim, because the drawer holds it
 // captive anyway.
 //
-// Measured, not guessed. fred-drawer-dovetail-coupon printed the joint at five
-// clearances; the tightest -- 0.0, one pip -- seated well and if anything a
-// little loose, so nominal is where the printer lands. The coupon's centre
-// socket tracks this value, so a re-print now sweeps -0.2 to +0.2 and will say
-// whether an interference fit is better still.
+// Measured twice, and now confirmed. fred-drawer-dovetail-coupon v1.0 swept
+// 0.0 to +0.4 and the tightest socket fitted best, which set this to 0. v1.1
+// re-swept -0.2 to +0.2 around that, and the CENTRE socket -- three pips --
+// fitted perfectly. So 0 is not merely the best of a row that was aimed too
+// loose: it is where this printer lands, and the interference fits either
+// side of it were not an improvement.
+//
+// A centre win is exactly what a calibrated coupon is supposed to say, which
+// makes it worth stating plainly: THERE IS NOTHING TO CHANGE HERE. Re-print
+// the coupon after a filament or nozzle change and the centre should keep
+// winning. An offset socket winning means ADJUSTING this by that step, not
+// adding another one to it.
 dove_fit  = 0;
 
 // Clearance above the tab, and NOT the same number as dove_fit.
@@ -79,6 +86,10 @@ dove_fit  = 0;
 //
 // 0.6 is three layers at the 0.2 mm layer height these print at, so the gap
 // survives a sagging bridge and quantization instead of being consumed by it.
+//
+// Confirmed on the v1.1 coupon, which is the print that mattered: the mortise
+// now seats flush on the tenon rather than standing off it, so the roof does
+// clear the tab by enough. That was the whole reason this constant exists.
 dove_z_fit = 0.6;
 
 // Two dovetails per seam, not one: one tab is a pivot, and a pair 25% and 75%
