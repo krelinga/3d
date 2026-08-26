@@ -54,7 +54,9 @@ updating one, check whether a claim in another has gone stale.
   the last release), `check_fonts.py` (see below), `build_record.py` and
   `print_md.py` (release assets).
 - **Committed thumbnails.** `thumbnails/<part>/<part>.png`, rendered by
-  `make thumbnails` and compared exactly — not with a pixel tolerance — in CI.
+  `make thumbnails` and compared in CI against a 50-pixel tolerance,
+  calibrated to measured cross-host rendering noise. Byte equality is the fast
+  path; the image comparison runs only on files that moved.
 - **Font check.** `tools/check_fonts.py` asks OpenSCAD for the evaluated CSG
   tree and measures each `(text, font)` pair against a deliberately
   unresolvable control name, catching the silent fallback that leaves a
@@ -124,10 +126,13 @@ geometry assertions in `tools/metrics.py` are the closest thing to a test.
 - **OpenSCAD streams its output** — a render produces many incremental writes,
   so anything reading the output concurrently should read a path that was
   atomically renamed into place.
-- **`imagemagick` / `bin/magick` are no longer used by CI.** The thumbnail
-  check compares exactly rather than with a pixel tolerance. Both are kept for
-  ad-hoc investigation; dropping imagemagick from the image would cost a pin
-  bump, so it is a candidate for the next one rather than worth doing alone.
+- **`imagemagick` / `bin/magick` are load-bearing in CI again.** They were
+  briefly not: the thumbnail check compared bytes, and dropping imagemagick was
+  a candidate for the next pin bump. Then a thumbnail turned out to differ
+  between the devcontainer and the GitHub runner by exactly one pixel — a
+  depth tie at a silhouette corner, broken differently by different CPUs — so
+  the check now measures pixels. Do not remove imagemagick from the image.
+  `initial-design.md`, "Why not a pixel tolerance", has the measurements.
 - **OpenSCAD's exit code is not a sufficient gate.** An *empty* top-level
   object exits 1 (so the build stops there), but a *non-manifold* result exits
   0 with a file written, and `--hardwarnings` does not change that — measured,

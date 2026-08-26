@@ -744,15 +744,22 @@ Headless rendering works without X on dev snapshots (built-in EGL). On a release
 image it would need `xvfb-run -a` and `docker --init` — another reason the pin
 is a dev snapshot.
 
-### The freshness check compares exactly
+### The freshness check compares rendered pixels
 
-CI regenerates the thumbnails and fails if any differ from what is committed.
-No tolerance, no ImageMagick, no threshold:
+CI regenerates the thumbnails and fails if any differs from what is committed
+by more than a measured number of pixels. Byte equality is the fast path and
+the ordinary case; the image comparison runs only on files that moved:
 
 ```sh
 make -B thumbnails
-git diff --quiet -- thumbnails/ || fail
+git diff --quiet -- thumbnails/ && pass          # ordinary case, no image work
+# else, for each changed file:
+magick compare -metric AE <committed> <regenerated> null:   # fail past 50 px
 ```
+
+This replaced an exact byte comparison. The reasoning for that original choice
+is preserved below, because it is still what keeps the tolerance small — what
+changed is one measured fact, not the argument.
 
 CI must **force** the regeneration (`make -B thumbnails`). A fresh checkout
 gives every file the same mtime, so an ordinary `make thumbnails` concludes the
@@ -789,6 +796,55 @@ which is what a developer would do anyway. A tolerance fails silently and
 permanently. If PNG rendering ever does become unstable, the fix is a *small*
 tolerance calibrated to observed noise — not a large one chosen defensively
 against a hypothetical.
+
+#### That contingency has now fired
+
+Rendered PNGs are reproducible **per host**, not across hosts. The fifteen
+regenerations above all ran on one machine, which is exactly the case that
+stays byte-identical.
+
+Measured on `fred-drawer-pens-front`, whose thumbnail passed locally and failed
+on CI:
+
+- **Thirteen of fourteen** thumbnails were byte-identical between the
+  devcontainer and the GitHub runner — including six other parts built from
+  the same library module at other camera angles.
+- The fourteenth differed by **one pixel** of 480,000, at (709, 346): the
+  silhouette corner where the dovetail tab's top face meets the body's side
+  face at equal depth. Local rendered it `srgb(24,59,61)`, CI
+  `srgb(62,154,160)` — the two faces, not two shades of one. Every
+  neighbouring pixel agreed.
+- Three consecutive local renders were byte-identical to each other *and* to
+  the committed file. Same pinned digest on both sides, reached the same way
+  (`pr.yml` has no `container:`), same generated command, same camera.
+
+So this is a depth tie broken differently by different CPUs, not the
+tessellation instability originally feared. The earlier finding stands
+unaltered: rasterizing at 800×600 does not surface vertex-level variation.
+
+Getting that evidence needed a change of its own. `make -B` overwrites the
+committed PNGs in place, so the runner held the only artifact that could
+settle it and then discarded it — and a difference that exists only on the
+runner's CPU cannot, by construction, be reproduced on the machine trying to
+diff it. `pr.yml` now uploads the regenerated tree as an artifact when the
+check fails.
+
+The tolerance is **50 pixels**, calibrated rather than picked:
+
+| | pixels |
+|---|---|
+| Cross-host disagreement, measured | 1 |
+| **Threshold** | **50** |
+| 0.62% volume change — the case that sank the original proposal | 542 |
+| 0.1 mm wall thickness change | 905 |
+
+Fifty is fifty times the observed noise and an order of magnitude below the
+smallest real change on record. Critically it **still fails the 542-pixel
+case**, which is the precise failure that defeated the earlier design: the
+objection was to a tolerance of 2400 pixels chosen defensively, not to the
+existence of a tolerance. The asymmetry argument above is what keeps the
+number this small — a tolerance fails silently, so it has to sit close enough
+to zero that anything real trips it.
 
 ## CI
 
