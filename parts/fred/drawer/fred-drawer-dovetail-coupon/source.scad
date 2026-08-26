@@ -15,6 +15,13 @@ include <krelinga/drawer_organizer.scad>
 // the model. This prints one tab and a row of sockets stepped either side of
 // nominal; slide the tab into each and let the joint pick the winner.
 //
+// The sweep is PLAN clearance only. Every socket in the row shares one
+// dove_z_fit, so the row varies one thing at a time -- which it did not
+// originally, and that cost a print: when a single `fit` set both the plan
+// offset and the roof height, the best-fitting socket was necessarily also
+// the one with no room above the tab, and it would not seat. Sweeping the two
+// together cannot distinguish "too tight in plan" from "bottoming out in Z".
+//
 // Read the notches, not the position: socket i carries i+1 of them, so the row
 // cannot be read backwards and a socket stays identifiable once broken off.
 // Whichever seats snugly -- firm by hand, no mallet, no rock -- names what

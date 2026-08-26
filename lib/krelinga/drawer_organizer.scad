@@ -50,16 +50,36 @@ dove_tip  = 16;   // width at the tip
 // through the pocket's open underside. Closing the bottom as well would leave
 // no way in at all -- the same reason a pin joint cannot work here.
 dove_height = 4;
-// Clearance per face between tab and socket. FDM leaves the socket tight and
-// the tab fat, so this is deliberately generous: a dovetail that needs a mallet
-// is worse than one that needs a shim, because the drawer holds it captive
-// anyway.
+// Clearance per face between tab and socket, IN PLAN ONLY. FDM leaves the
+// socket tight and the tab fat, so some is needed: a dovetail that needs a
+// mallet is worse than one that needs a shim, because the drawer holds it
+// captive anyway.
 //
-// This is a guess until it is measured. fred-drawer-dovetail-coupon prints
-// the same joint at a spread of fits either side of this value; whichever
-// seats best names what this should be. Set it before committing filament to
-// six trays -- a joint that is wrong here is wrong on all seven seams at once.
-dove_fit  = 0.2;
+// Measured, not guessed. fred-drawer-dovetail-coupon printed the joint at five
+// clearances; the tightest -- 0.0, one pip -- seated well and if anything a
+// little loose, so nominal is where the printer lands. The coupon's centre
+// socket tracks this value, so a re-print now sweeps -0.2 to +0.2 and will say
+// whether an interference fit is better still.
+dove_fit  = 0;
+
+// Clearance above the tab, and NOT the same number as dove_fit.
+//
+// It used to be: the socket was extruded to dove_height + dove_fit, so one
+// parameter set both the plan clearance and the roof height. That coupling is
+// why the coupon's best-fitting socket was also the one that would not seat --
+// at 0.0 plan clearance the roof landed at exactly the tab's top face, leaving
+// nothing for the roof to sag into. It bridges over an open pocket, so it does
+// sag, and the mortise bottomed out on the tenon before the parts were flush.
+//
+// Z clearance is close to free here, which is why this is generous. The roof
+// carries no load and never needs to touch the tab: the dovetail's whole job
+// is restraint in plan, and the trays sit on the drawer bottom, not on each
+// other. All it costs is floor thickness above the socket -- 1.75 mm at these
+// numbers, over the ~110 mm2 of each socket, against 1/4 inch everywhere else.
+//
+// 0.6 is three layers at the 0.2 mm layer height these print at, so the gap
+// survives a sagging bridge and quantization instead of being consumed by it.
+dove_z_fit = 0.6;
 
 // Two dovetails per seam, not one: one tab is a pivot, and a pair 25% and 75%
 // along the seam stops the parts hinging about it. Kept off the corners so
@@ -82,14 +102,18 @@ module dove_tab() {
 // from the -X or -Y edge, and the neighbour's tab enters pointing into this
 // part -- so in this part's own frame the socket has exactly the tab's
 // orientation, which is why tabs and sockets share the same rotation below.
+// `fit` is the plan clearance only. The roof height comes from dove_z_fit and
+// is deliberately independent of it -- see that constant for what conflating
+// the two cost.
 module dove_socket(fit = dove_fit) {
-    // Sunk from below the underside so the cut is clean there, and stopped at
-    // dove_height + fit so what remains above is unbroken floor.
-    translate([0, 0, -1]) linear_extrude(height = dove_height + fit + 1) {
+    // Sunk from below the underside so the cut is clean there, and stopped
+    // short of the platform top so what remains above is unbroken floor.
+    translate([0, 0, -1])
+        linear_extrude(height = dove_height + dove_z_fit + 1) {
         offset(delta = fit) dove_profile();
         // Squares off the socket mouth so the cut reaches the part edge
         // cleanly even after the offset rounds nothing and moves the root to
-        // -dove_fit. Cheap insurance against a sliver of material at the seam.
+        // -fit. Cheap insurance against a sliver of material at the seam.
         translate([-(dove_root / 2 + fit), -1])
             square([dove_root + 2 * fit, 1.5]);
     }

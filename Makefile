@@ -24,10 +24,15 @@ THUMB_COLORSCHEME ?= Tomorrow
 # How many pixels a re-render may differ from the committed PNG before it
 # counts as a real change. Not zero: the same mesh rasterizes one pixel
 # differently on a different CPU, so zero would make every machine rewrite the
-# other's thumbnails forever. Calibrated to that measured noise and kept far
-# below the smallest real geometry change -- docs/design/initial-design.md,
-# "Why not a pixel tolerance", has the numbers.
-THUMB_TOLERANCE_PX ?= 50
+# other's thumbnails forever.
+#
+# Bounded from BOTH sides by measurement, which is the only way this number is
+# safe. Cross-host noise is 1 px; the smallest real geometry change seen so far
+# moved 42. It was briefly 50, which sat above that 42 and silently kept a
+# stale thumbnail -- exactly the failure mode that got a tolerance rejected in
+# the first place. docs/design/initial-design.md, "Why not a pixel tolerance",
+# has the table.
+THUMB_TOLERANCE_PX ?= 10
 export THUMB_TOLERANCE_PX
 
 # Decides whether a fresh render replaces the committed one.

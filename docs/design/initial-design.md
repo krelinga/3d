@@ -852,22 +852,30 @@ runner's CPU cannot, by construction, be reproduced on the machine trying to
 diff it. `pr.yml` now uploads the regenerated tree as an artifact when the
 check fails.
 
-The tolerance is **50 pixels**, calibrated rather than picked:
+The tolerance is **10 pixels**, and it has to be bounded from *both* sides:
 
 | | pixels |
 |---|---|
 | Cross-host disagreement, measured | 1 |
-| **Threshold** | **50** |
+| **Threshold** | **10** |
+| Socket roof +0.4 mm and mouth −0.2 mm | 42 |
 | 0.62% volume change — the case that sank the original proposal | 542 |
 | 0.1 mm wall thickness change | 905 |
 
-Fifty is fifty times the observed noise and an order of magnitude below the
-smallest real change on record. Critically it **still fails the 542-pixel
-case**, which is the precise failure that defeated the earlier design: the
-objection was to a tolerance of 2400 pixels chosen defensively, not to the
-existence of a tolerance. The asymmetry argument above is what keeps the
-number this small — a tolerance fails silently, so it has to sit close enough
-to zero that anything real trips it.
+It was 50 first, reasoning only from the lower bound: fifty times the observed
+noise, and far below the 542-pixel change that defeated the original 2400-pixel
+proposal. That reasoning was incomplete, and the very next geometry change
+proved it. Narrowing a dovetail socket's mouth by 0.2 mm and raising its roof
+by 0.4 mm moved **42** pixels — under 50. Two thumbnails were quietly kept at
+the old geometry, which is the failure the asymmetry argument predicts and the
+exact reason a tolerance was rejected the first time round.
+
+So the lower bound alone is not enough to choose this number. It has to sit
+above the noise **and** below the smallest change worth seeing, and only the
+second bound is discovered by making changes. Ten is ten times the measured
+noise and four times under the smallest real change observed so far; if
+something real ever lands under ten pixels, the number moves again rather than
+the principle.
 
 ## CI
 
