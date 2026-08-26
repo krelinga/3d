@@ -15,11 +15,16 @@
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 
-	// Puts the shims under bin/ (see docs/design/openscad-image.md) onto PATH for
+	// Two things: puts the shims under bin/ (see docs/design/openscad-image.md)
+	// onto PATH, and points git at the committed hooks in .githooks/. Hooks in
+	// .git/hooks are not version controlled, so they would exist only for
+	// whoever created them.
+	//
+	// PATH detail: this targets
 	// every process in the container, not just VS Code's own remote server —
 	// /usr/local/bin is on the default PATH regardless of how a process was
 	// started, and precedes /usr/bin in Debian/Ubuntu's default ordering.
-	"postCreateCommand": "for f in \"${containerWorkspaceFolder}\"/bin/*; do [ -L \"$f\" ] && sudo ln -sf \"$f\" \"/usr/local/bin/$(basename \"$f\")\"; done"
+	"postCreateCommand": "for f in \"${containerWorkspaceFolder}\"/bin/*; do [ -L \"$f\" ] && sudo ln -sf \"$f\" \"/usr/local/bin/$(basename \"$f\")\"; done; git -C \"${containerWorkspaceFolder}\" config core.hooksPath .githooks"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"

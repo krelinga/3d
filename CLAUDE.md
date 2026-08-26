@@ -66,6 +66,12 @@ make pr    # validate, build, regenerate thumbnails + README index; run before p
 Individual targets exist (`make check`, `make index`, `make thumbnails`) but
 `make pr` runs them in CI's order and regenerates rather than only checking.
 
+A committed `pre-commit` hook (`.githooks/pre-commit`, enabled via
+`core.hooksPath` in `postCreateCommand`) runs `make check` on every commit.
+It validates the *working tree*, not the staged content, so a partially
+staged tree can produce a false pass or fail — it is a fast first filter,
+not the authority. Bypass with `git commit --no-verify`.
+
 Run OpenSCAD directly through the shim, which executes it inside the pinned
 image:
 
