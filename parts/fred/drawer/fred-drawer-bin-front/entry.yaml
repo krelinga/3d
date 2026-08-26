@@ -1,0 +1,9 @@
+version: "1.0"
+status: active
+description: Storage bin for the front-right of Fred's drawer organizer, one 5x6 inch box, socketed to the pen tray beside it and dovetailed to the bin behind
+camera: [63.5, 76.2, 25.4, 62, 0, 205, 430]
+print:
+  layer_height: 0.2
+  infill: 15
+  supports: false
+  orientation: platform flat on the bed, box opening upward
