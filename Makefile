@@ -31,7 +31,7 @@ PARTS := $(shell find parts -name entry.yaml 2>/dev/null)
 # the directories catches exactly the cases the file list cannot.
 PART_DIRS := $(shell find parts -type d 2>/dev/null)
 
-.PHONY: all pr check catalog-check index index-check thumbnails clean help
+.PHONY: all pr check catalog-check index index-check fonts-check thumbnails clean help
 .DEFAULT_GOAL := all
 
 $(BUILD)/parts.mk: $(PARTS) $(PART_DIRS) tools/gen_rules.py tools/catalog.py
@@ -57,6 +57,7 @@ thumbnails: $(THUMBNAILS)
 # disagree with CI, which forces them for the same reason.
 pr:
 	@$(MAKE) --no-print-directory catalog-check
+	@$(MAKE) --no-print-directory fonts-check
 	@$(MAKE) --no-print-directory -j$(JOBS) all
 	@$(MAKE) --no-print-directory -B thumbnails
 	@$(MAKE) --no-print-directory index
@@ -82,10 +83,18 @@ index:
 index-check:
 	$(PYTHON) tools/render_index.py --check
 
+# Verifies every string a part draws actually renders in the font it names.
+# Unlike the other checks this one renders, but only a few tiny probes, and
+# `make check` already needs the toolchain image to run $(PYTHON) at all -- so
+# the dependency is unchanged and only the runtime grows. See
+# docs/design/fonts.md.
+fonts-check:
+	$(PYTHON) tools/check_fonts.py
+
 # Everything CI can check without building. The index check is included
 # deliberately: without it `make check` passes on a stale index and the first
 # sign of trouble is a failed PR, which is the loop this target exists to close.
-check: catalog-check index-check
+check: catalog-check index-check fonts-check
 
 clean:
 	rm -rf $(OUT) $(BUILD)
@@ -94,7 +103,7 @@ help:
 	@echo "make pr         everything to do before opening a PR (start here)"
 	@echo ""
 	@echo "make            build every part and variant (3mf + stl + metrics)"
-	@echo "make check      validate the catalog and the README index"
+	@echo "make check      validate the catalog, README index and fonts"
 	@echo "make index      regenerate the README index block"
 	@echo "make thumbnails render the committed PNGs for PR review"
 	@echo "make clean      remove out/ and build/"

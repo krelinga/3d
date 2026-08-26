@@ -1,6 +1,6 @@
 # Fonts in models
 
-Status: specified, not implemented — the availability check does not exist yet
+Status: implemented — `tools/check_fonts.py`, wired into `make check` and CI
 Scope: using OpenSCAD's `text()` safely. What is pinned, what is deterministic,
 and the one failure mode that no existing gate catches.
 
@@ -172,6 +172,35 @@ The failure message must therefore describe the symptom rather than guess the
 cause — *"`日` does not render in Liberation Sans; output is identical to the
 fallback"* covers a missing font and a missing glyph without claiming to know
 which.
+
+### The fallback font is a blind spot, and rule 4 is why
+
+Implementing this surfaced a limit the design did not anticipate. The check
+recognises a failure *by its resemblance to the fallback*, so the fallback font
+is the one name it can never judge: asking for Liberation Sans and asking for
+nonsense produce identical geometry, because the second resolves to the first.
+
+No refinement of the comparison fixes this — it is not a matter of a better
+control string or a tighter tolerance. Nothing about the resulting mesh
+distinguishes "you got what you asked for" from "you got the default instead",
+because in this one case they are the same mesh.
+
+Rule 4 turns out to be the answer rather than a nicety. `check_fonts.py`
+records the expected fallback (`EXPECTED_FALLBACK`), and:
+
+- a request naming the fallback passes, having been shown to resolve;
+- every other name is measured against it as before;
+- and the recorded value is itself asserted once per run — if an unresolvable
+  name stops rendering as `EXPECTED_FALLBACK`, a toolchain bump has moved the
+  default, and the run fails rather than quietly measuring against the wrong
+  baseline.
+
+Two consequences worth stating plainly. Glyph coverage cannot be checked for
+the fallback font specifically — a character it lacks renders as `.notdef`,
+which is exactly what the control renders, so it looks correct. And the check
+is therefore weakest for the font a part is most likely to reach for by
+default, which is a further argument for rule 1 rather than a reason to relax
+it.
 
 ### There is no allowlist to maintain
 
