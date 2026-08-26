@@ -33,16 +33,16 @@ committed artifacts (thumbnails and the README index), then tells you which
 of them changed and need committing. It does what CI does, in CI's order, so
 a green `make pr` should mean a green PR.
 
-A `pre-commit` hook runs `make check` — the fast subset: catalog, README index
-and fonts, about half a second. It is enabled automatically by the devcontainer
-and skipped with `git commit --no-verify`. It does not build or check
+A `pre-commit` hook runs `make check` — the fast subset: catalog, README
+index and fonts, about a second. It is enabled automatically by the
+devcontainer and skipped with `git commit --no-verify`. It does not build or check
 thumbnails; `make pr` remains the thing to run before pushing.
 
 The pieces, if you need one on its own:
 
 ```sh
 make             # build every part: 3mf + stl + metrics
-make check       # validate the catalog and the README index
+make check       # validate the catalog, the README index and fonts
 make index       # regenerate the README index block
 make thumbnails  # re-render the committed review images
 make -j$(nproc)  # parts are independent; OpenSCAD is single-threaded per run
