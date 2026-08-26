@@ -56,9 +56,11 @@ updating one, check whether a claim in another has gone stale.
 - **Committed thumbnails.** `thumbnails/<part>/<part>.png`, rendered by
   `make thumbnails`. The rules call `tools/place_thumbnail.sh` rather than
   `mv`: a fresh render replaces the committed PNG only if it differs by more
-  than `THUMB_TOLERANCE_PX` (50), because the same mesh rasterizes one pixel
+  than `THUMB_TOLERANCE_PX` (10), because the same mesh rasterizes one pixel
   differently on a different CPU. CI is then just `git diff --quiet --
   thumbnails/`, since noise never reaches the working tree in the first place.
+  The number is bounded from both sides by measurement — it was briefly 50,
+  which sat above a real 42-pixel change and silently kept a stale thumbnail.
 - **Font check.** `tools/check_fonts.py` asks OpenSCAD for the evaluated CSG
   tree and measures each `(text, font)` pair against a deliberately
   unresolvable control name, catching the silent fallback that leaves a

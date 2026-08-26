@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.1"
 status: active
 description: Dovetail fit coupon for the drawer organizer - one tab and five sockets stepped either side of nominal, to find the clearance your printer actually produces
 camera: [78, -4, 3.2, 52, 0, 0, 250]
