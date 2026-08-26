@@ -1,6 +1,6 @@
 #!/bin/sh
 # Run `make check` before every commit: catalog validation, README index
-# freshness, and font resolution. Roughly half a second.
+# freshness, and font resolution. Roughly a second.
 #
 # Enabled by core.hooksPath, which devcontainer.json sets on create. Hooks
 # under .git/hooks are not version controlled, so a hook that lives there

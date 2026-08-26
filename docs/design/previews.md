@@ -287,14 +287,14 @@ rediscovered from scratch.
   into the repo. Deliberately deferred: it costs a little complexity for a
   case (working offline) that has not actually come up.
 
-## Current-state caveat
+## Current state
 
-As with the rest of `docs/design/`, this rests partly on unbuilt work:
-`parts/`, `lib/`, `tools/`, and the `Makefile` do not exist yet, so "the
-watcher runs `make`" has nothing to call today.
+The caveat this section used to carry is spent: `parts/`, `lib/`, `tools/` and
+the `Makefile` all exist, so the conversion it anticipated has happened.
+`viewer/server.mjs` watches `parts/` and `lib/` and calls `make` — it no longer
+renders a nominated file directly through `bin/openscad`, and it no longer
+looks at the old flat `scad/` tree, which is gone.
 
-The prototype in `viewer/` therefore does the interim thing: it watches
-`scad/**/*.scad` and renders one nominated file directly through
-`bin/openscad`. That exercises the entire loop against today's flat tree,
-and converts cleanly later — swapping "render the nominated file" for "run
-`make`" is the only change required.
+`make` deciding what to rebuild is what makes a `lib/` edit that moves several
+parts at once behave correctly, which the interim "render the nominated file"
+prototype could not have done.
