@@ -48,6 +48,7 @@ jobs:
       # failed by this point.
 
       - name: Verify committed thumbnails are fresh
+        id: thumbnails
         run: |
           # -B is load-bearing: a fresh checkout gives every file the same
           # mtime, so a plain `make thumbnails` decides the committed PNGs are
@@ -61,6 +62,23 @@ jobs:
           echo "::error::Thumbnails are stale; run 'make pr' and commit:"
           git diff --name-only -- thumbnails/ | sed 's/^/  /'
           exit 1
+
+      # `make -B` above overwrote the committed PNGs in place, so on failure
+      # thumbnails/ holds what THIS host rendered. That is the one thing a
+      # local checkout cannot produce: a thumbnail that differs only on the
+      # runner's CPU is, by definition, not reproducible on the machine trying
+      # to debug it. Without this the only move is to guess, push, and wait.
+      #
+      # Scoped to this step's own outcome rather than a bare `failure()`, which
+      # would also fire when an earlier step failed -- and then upload the
+      # untouched committed PNGs as though they were evidence.
+      - name: Upload the regenerated thumbnails
+        if: failure() && steps.thumbnails.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-thumbnails
+          path: thumbnails/
+          retention-days: 7
 
       - name: Check the README index is current
         run: make index-check
