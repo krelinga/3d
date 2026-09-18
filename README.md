@@ -96,6 +96,7 @@ a `variants:` entry to `entry.yaml`.
 
 | Part | Version | Description | Release | Thumbnail |
 |---|---|---|---|---|
+| `minibase-32mm` | 1.0.0 | 32mm round miniature base with a shallow centre recess | [minibase-32mm/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-32mm%2Fv1.0.0) | ![minibase-32mm](thumbnails/minibase-32mm/minibase-32mm.png) |
 | `minibase-40mm-heavy` | 1.0.0 | Large round miniature base with a wide recess for a weight or magnet (radius 40mm, i.e. 80mm across) | [minibase-40mm-heavy/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-40mm-heavy%2Fv1.0.0) | ![minibase-40mm-heavy](thumbnails/minibase-40mm-heavy/minibase-40mm-heavy.png) |
 | `minibase-four-fifths-inch` | 1.0.0 | Four-fifths-inch round miniature base with a shallow centre recess | [minibase-four-fifths-inch/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-four-fifths-inch%2Fv1.0.0) | ![minibase-four-fifths-inch](thumbnails/minibase-four-fifths-inch/minibase-four-fifths-inch.png) |
 | `minibase-one-inch` | 1.0.0 | One-inch round miniature base with a shallow centre recess | [minibase-one-inch/v1.0.0](https://github.com/krelinga/3d/releases/tag/minibase-one-inch%2Fv1.0.0) | ![minibase-one-inch](thumbnails/minibase-one-inch/minibase-one-inch.png) |
